@@ -6,6 +6,8 @@ import { app } from 'electron';
 import { registerHandler } from './registry';
 import { getDb } from '../db/connection';
 import { getSchemaVersion } from '../db/migrate';
+import { registerAuthHandlers } from './auth';
+import { registerUserHandlers } from './users';
 
 export function registerAllHandlers(): void {
   registerHandler('app:info', () => ({
@@ -21,4 +23,7 @@ export function registerAllHandlers(): void {
       .get() as { c: number };
     return { ok: true as const, tables: row.c };
   });
+
+  registerAuthHandlers();
+  registerUserHandlers();
 }

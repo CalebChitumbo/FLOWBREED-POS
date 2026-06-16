@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { app, BrowserWindow, shell } from 'electron';
 import { initDatabase, closeDatabase } from './db/connection';
 import { runMigrations } from './db/migrate';
+import { initServices } from './services';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
 import { log } from './logger';
@@ -50,6 +51,7 @@ app.whenReady().then(() => {
     const dbPath = join(app.getPath('userData'), 'flowbreeds-pos.db');
     const db = initDatabase(dbPath);
     const schemaVersion = runMigrations(db);
+    initServices(db);
     log.info(`Local DB ready at ${dbPath} (schema v${schemaVersion})`);
   } catch (err) {
     log.error('Fatal: failed to initialise database', err);
