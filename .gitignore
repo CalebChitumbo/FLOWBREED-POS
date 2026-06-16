@@ -34,3 +34,5 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+.e2e-userdata/
+tests/e2e/screenshots/
