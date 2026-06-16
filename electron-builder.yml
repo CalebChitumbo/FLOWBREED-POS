@@ -1,0 +1,43 @@
+# electron-builder configuration — produces the Windows NSIS installer (.exe).
+# IMPORTANT: better-sqlite3 + argon2 are native modules and CANNOT be cross-compiled
+# from Linux to Windows. Build this target on a Windows machine or a `windows-latest`
+# CI runner (npm ci && npm run build:win), which rebuilds native deps for Electron+win32-x64.
+appId: com.flowbreeds.pos
+productName: Flowbreeds POS
+copyright: Copyright © Flowbreeds Farms Shop
+
+directories:
+  buildResources: build
+  output: release/${version}
+
+files:
+  - out/**/*
+  - package.json
+
+asarUnpack:
+  # Native modules must be unpacked from the asar archive to load at runtime.
+  - '**/*.node'
+  - node_modules/better-sqlite3/**
+  - node_modules/argon2/**
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Flowbreeds POS
+  deleteAppDataOnUninstall: false
+
+# Auto-update via a generic HTTPS host (e.g. S3 / Cloudflare R2 static bucket).
+# Replace the url before first release. electron-updater reads latest.yml here.
+publish:
+  - provider: generic
+    url: https://updates.example.com/flowbreeds-pos/

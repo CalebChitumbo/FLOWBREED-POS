@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+release/
+*.tsbuildinfo
+
+# Local databases / runtime data
+*.db
+*.db-shm
+*.db-wal
+/data/
+
+# Logs
+logs/
+*.log
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.serviceaccount.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
