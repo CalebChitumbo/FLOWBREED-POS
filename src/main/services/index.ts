@@ -10,6 +10,7 @@ import { AuditService } from './audit-service';
 import { OutboxService } from './outbox-service';
 import { UserService } from './user-service';
 import { AuthService } from './auth-service';
+import { ProductService } from './product-service';
 
 export interface Services {
   sessions: SessionManager;
@@ -18,6 +19,7 @@ export interface Services {
   outbox: OutboxService;
   users: UserService;
   auth: AuthService;
+  products: ProductService;
 }
 
 export function buildServices(db: DB): Services {
@@ -27,7 +29,8 @@ export function buildServices(db: DB): Services {
   const outbox = new OutboxService(db);
   const users = new UserService(db, audit, outbox);
   const auth = new AuthService(users, sessions, audit);
-  return { sessions, config, audit, outbox, users, auth };
+  const products = new ProductService(db, audit, outbox);
+  return { sessions, config, audit, outbox, users, auth, products };
 }
 
 let services: Services | null = null;

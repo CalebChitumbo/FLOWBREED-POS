@@ -1,26 +1,30 @@
 import { AppShell, Badge, Button, Group, Menu, NavLink, Text, Title } from '@mantine/core';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import type { Role } from '@shared/constants';
 import { useAuthStore } from '../stores/auth';
 import { useIdleLock } from '../hooks/useIdleLock';
 import { UsersPage } from '../pages/UsersPage';
+import { ProductsPage } from '../pages/ProductsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
+const MANAGER: Role[] = ['manager', 'administrator'];
+const ADMIN: Role[] = ['administrator'];
 
 interface NavItem {
   path: string;
   label: string;
-  adminOnly?: boolean;
+  roles?: Role[];
 }
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/checkout', label: 'Checkout' },
-  { path: '/products', label: 'Products' },
-  { path: '/inventory', label: 'Inventory' },
+  { path: '/products', label: 'Products', roles: MANAGER },
+  { path: '/inventory', label: 'Inventory', roles: MANAGER },
   { path: '/sessions', label: 'Till Sessions' },
-  { path: '/reports', label: 'Reports' },
-  { path: '/users', label: 'Users', adminOnly: true },
-  { path: '/settings', label: 'Settings' },
+  { path: '/reports', label: 'Reports', roles: MANAGER },
+  { path: '/users', label: 'Users', roles: ADMIN },
+  { path: '/settings', label: 'Settings', roles: ADMIN },
 ];
 
 function NavItems() {
@@ -29,7 +33,7 @@ function NavItems() {
   const role = useAuthStore((s) => s.user?.role);
   return (
     <>
-      {NAV_ITEMS.filter((i) => !i.adminOnly || role === 'administrator').map((item) => (
+      {NAV_ITEMS.filter((i) => !i.roles || (role !== undefined && i.roles.includes(role))).map((item) => (
         <NavLink
           key={item.path}
           label={item.label}
@@ -100,16 +104,7 @@ function Shell() {
               />
             }
           />
-          <Route
-            path="/products"
-            element={
-              <PlaceholderPage
-                title="Products"
-                milestone="M2"
-                summary="Product catalogue, barcodes and pricing management."
-              />
-            }
-          />
+          <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
           <Route
             path="/inventory"
             element={
@@ -140,7 +135,7 @@ function Shell() {
               />
             }
           />
-          <Route path="/users" element={<AdminOnly element={<UsersPage />} />} />
+          <Route path="/users" element={<RoleGuard roles={ADMIN} element={<UsersPage />} />} />
           <Route
             path="/settings"
             element={
@@ -158,9 +153,9 @@ function Shell() {
   );
 }
 
-function AdminOnly({ element }: { element: React.ReactElement }) {
+function RoleGuard({ roles, element }: { roles: Role[]; element: React.ReactElement }) {
   const role = useAuthStore((s) => s.user?.role);
-  return role === 'administrator' ? element : <Navigate to="/checkout" replace />;
+  return role && roles.includes(role) ? element : <Navigate to="/checkout" replace />;
 }
 
 export function AppLayout() {

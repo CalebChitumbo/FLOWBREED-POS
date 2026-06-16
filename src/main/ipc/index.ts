@@ -8,6 +8,7 @@ import { getDb } from '../db/connection';
 import { getSchemaVersion } from '../db/migrate';
 import { registerAuthHandlers } from './auth';
 import { registerUserHandlers } from './users';
+import { registerProductHandlers } from './products';
 
 export function registerAllHandlers(): void {
   registerHandler('app:info', () => ({
@@ -26,4 +27,5 @@ export function registerAllHandlers(): void {
 
   registerAuthHandlers();
   registerUserHandlers();
+  registerProductHandlers();
 }

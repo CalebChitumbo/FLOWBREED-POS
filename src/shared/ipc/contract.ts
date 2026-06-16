@@ -13,7 +13,27 @@
  */
 
 import type { Role } from '../constants';
-import type { User } from '../types/domain';
+import type { User, Product, Barcode, PriceHistoryEntry } from '../types/domain';
+
+export interface ProductInput {
+  name: string;
+  category: string;
+  unitPrice: number;
+  unitOfMeasure: string;
+  isWeightBased?: boolean;
+  lowStockThreshold?: number;
+  barcodes?: { barcode: string; packLabel?: string | null }[];
+}
+
+export interface ProductPatch {
+  name?: string;
+  category?: string;
+  unitPrice?: number;
+  unitOfMeasure?: string;
+  isWeightBased?: boolean;
+  lowStockThreshold?: number;
+  active?: boolean;
+}
 
 export interface AppInfo {
   name: string;
@@ -62,6 +82,22 @@ export interface IpcContract {
     response: User;
   };
   'users:resetPassword': { request: { token: string; id: string; newPassword: string }; response: Ok };
+
+  // ---- Products (M2) ----
+  // search + findByBarcode are available to any authenticated user (checkout);
+  // the rest require manager/administrator.
+  'product:search': { request: { token: string; query: string }; response: Product[] };
+  'product:findByBarcode': { request: { token: string; barcode: string }; response: Product | null };
+  'product:list': { request: { token: string; includeInactive?: boolean }; response: Product[] };
+  'product:get': { request: { token: string; id: string }; response: Product };
+  'product:create': { request: { token: string; input: ProductInput }; response: Product };
+  'product:update': { request: { token: string; id: string; patch: ProductPatch }; response: Product };
+  'product:addBarcode': {
+    request: { token: string; productId: string; barcode: string; packLabel?: string | null };
+    response: Barcode;
+  };
+  'product:removeBarcode': { request: { token: string; barcodeId: string }; response: Ok };
+  'product:priceHistory': { request: { token: string; productId: string }; response: PriceHistoryEntry[] };
 }
 
 export interface IpcEvents {
@@ -100,6 +136,15 @@ export const IPC_CHANNELS = [
   'users:create',
   'users:update',
   'users:resetPassword',
+  'product:search',
+  'product:findByBarcode',
+  'product:list',
+  'product:get',
+  'product:create',
+  'product:update',
+  'product:addBarcode',
+  'product:removeBarcode',
+  'product:priceHistory',
 ] as const satisfies readonly IpcChannel[];
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */
