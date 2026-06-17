@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 import { useIdleLock } from '../hooks/useIdleLock';
 import { UsersPage } from '../pages/UsersPage';
 import { ProductsPage } from '../pages/ProductsPage';
+import { CheckoutPage } from '../pages/CheckoutPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
@@ -94,16 +95,7 @@ function Shell() {
       <AppShell.Main>
         <Routes>
           <Route path="/" element={<Navigate to="/checkout" replace />} />
-          <Route
-            path="/checkout"
-            element={
-              <PlaceholderPage
-                title="Checkout"
-                milestone="M3"
-                summary="Scan-to-sell, payments, receipts and refunds will live here."
-              />
-            }
-          />
+          <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
           <Route
             path="/inventory"

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { registerHandler } from './registry';
 import { getServices } from '../services';
+import { authorize } from '../security/authorize';
 
 const credentials = z.object({
   username: z.string().min(1, 'Enter a username.').max(64),
@@ -52,5 +53,14 @@ export function registerAuthHandlers(): void {
       .parse(req);
     await getServices().auth.changePassword(token, oldPassword, newPassword);
     return { ok: true as const };
+  });
+
+  registerHandler('auth:authorizeManager', async (req) => {
+    const { token, username, password } = tokenOnly
+      .extend({ username: z.string().min(1), password: z.string().min(1) })
+      .parse(req);
+    // Caller must be an authenticated user (e.g. the cashier requesting an override).
+    authorize(getServices().sessions, token);
+    return getServices().auth.authorizeManager(username, password);
   });
 }

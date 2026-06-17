@@ -11,6 +11,10 @@ import { OutboxService } from './outbox-service';
 import { UserService } from './user-service';
 import { AuthService } from './auth-service';
 import { ProductService } from './product-service';
+import { BranchService } from './branch-service';
+import { InventoryService } from './inventory-service';
+import { TillSessionService } from './till-session-service';
+import { SaleService } from './sale-service';
 
 export interface Services {
   sessions: SessionManager;
@@ -20,6 +24,10 @@ export interface Services {
   users: UserService;
   auth: AuthService;
   products: ProductService;
+  branches: BranchService;
+  inventory: InventoryService;
+  tills: TillSessionService;
+  sales: SaleService;
 }
 
 export function buildServices(db: DB): Services {
@@ -30,7 +38,15 @@ export function buildServices(db: DB): Services {
   const users = new UserService(db, audit, outbox);
   const auth = new AuthService(users, sessions, audit);
   const products = new ProductService(db, audit, outbox);
-  return { sessions, config, audit, outbox, users, auth, products };
+  const branches = new BranchService(db, config, outbox);
+  const inventory = new InventoryService(db, outbox);
+  const tills = new TillSessionService(db, audit, outbox);
+  const sales = new SaleService(db, products, branches, inventory, tills, config, audit, outbox);
+
+  // Every install (and every test DB) is tagged to a branch.
+  branches.ensureDefault();
+
+  return { sessions, config, audit, outbox, users, auth, products, branches, inventory, tills, sales };
 }
 
 let services: Services | null = null;

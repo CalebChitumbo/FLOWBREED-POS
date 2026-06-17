@@ -13,6 +13,8 @@ import { app, BrowserWindow, shell, protocol, session } from 'electron';
 import { initDatabase, closeDatabase } from './db/connection';
 import { runMigrations } from './db/migrate';
 import { initServices } from './services';
+import { PrinterService, setPrinter } from './printer/printer-service';
+import { FilePrinterTransport } from './printer/file-transport';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
 import { log } from './logger';
@@ -124,6 +126,8 @@ app.whenReady().then(() => {
     const db = initDatabase(dbPath);
     const schemaVersion = runMigrations(db);
     initServices(db);
+    // Dev/Linux uses the file-preview transport; Windows swaps in ESC/POS (M8).
+    setPrinter(new PrinterService(new FilePrinterTransport()));
     log.info(`Local DB ready at ${dbPath} (schema v${schemaVersion})`);
   } catch (err) {
     log.error('Fatal: failed to initialise database', err);

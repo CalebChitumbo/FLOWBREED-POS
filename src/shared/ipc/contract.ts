@@ -12,8 +12,40 @@
  * needs a concrete list to validate against).
  */
 
-import type { Role } from '../constants';
-import type { User, Product, Barcode, PriceHistoryEntry } from '../types/domain';
+import type { Role, PaymentMethod } from '../constants';
+import type {
+  User,
+  Product,
+  Barcode,
+  PriceHistoryEntry,
+  TillSession,
+  Transaction,
+} from '../types/domain';
+import type { ReceiptData } from '../types/receipt';
+
+export interface SaleItemPayload {
+  productId: string;
+  quantity: number;
+  lineDiscount?: number;
+}
+
+export interface CreateSalePayload {
+  items: SaleItemPayload[];
+  paymentMethod: PaymentMethod;
+  tendered?: number;
+  transactionDiscount?: number;
+  authorisedBy?: string;
+}
+
+export interface RefundPayload {
+  originalTxnId: string;
+  items: { productId: string; quantity: number }[];
+}
+
+export interface SaleResultPayload {
+  transaction: Transaction;
+  receipt: ReceiptData;
+}
 
 export interface ProductInput {
   name: string;
@@ -70,6 +102,23 @@ export interface IpcContract {
     request: { token: string; oldPassword: string; newPassword: string };
     response: Ok;
   };
+  'auth:authorizeManager': {
+    request: { token: string; username: string; password: string };
+    response: { userId: string; username: string };
+  };
+
+  // ---- Till sessions (M3/M5) ----
+  'session:open': { request: { token: string; openingFloat: number }; response: TillSession };
+  'session:current': { request: { token: string }; response: TillSession | null };
+  'session:close': { request: { token: string; sessionId?: string }; response: TillSession };
+  'session:listOpen': { request: { token: string }; response: TillSession[] };
+
+  // ---- Sales / checkout (M3) ----
+  'sale:create': { request: { token: string; input: CreateSalePayload }; response: SaleResultPayload };
+  'sale:refund': { request: { token: string; input: RefundPayload }; response: SaleResultPayload };
+  'sale:get': { request: { token: string; id: string }; response: Transaction };
+  'print:receipt': { request: { token: string; transactionId: string }; response: Ok };
+  'print:reprintLast': { request: { token: string }; response: Ok };
 
   // ---- Users (M1, administrator only) ----
   'users:list': { request: { token: string }; response: User[] };
@@ -132,6 +181,16 @@ export const IPC_CHANNELS = [
   'auth:current',
   'auth:unlock',
   'auth:changePassword',
+  'auth:authorizeManager',
+  'session:open',
+  'session:current',
+  'session:close',
+  'session:listOpen',
+  'sale:create',
+  'sale:refund',
+  'sale:get',
+  'print:receipt',
+  'print:reprintLast',
   'users:list',
   'users:create',
   'users:update',

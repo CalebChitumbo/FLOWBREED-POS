@@ -84,4 +84,17 @@ export class AuthService {
     }
     await this.users.setOwnPassword(session.userId, newPassword);
   }
+
+  /**
+   * Verify a manager/administrator's credentials WITHOUT creating a session — used
+   * for on-the-spot overrides (e.g. a cashier applying a discount). Returns the
+   * authorising manager's id.
+   */
+  async authorizeManager(username: string, password: string): Promise<{ userId: string; username: string }> {
+    const row = this.users.findRowByUsername(username.trim());
+    if (!row || row.active !== 1) throw Errors.authFailed();
+    if (row.role !== 'manager' && row.role !== 'administrator') throw Errors.forbidden();
+    if (!(await verifyPassword(row.password_hash, password))) throw Errors.authFailed();
+    return { userId: row.id, username: row.username };
+  }
 }
