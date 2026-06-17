@@ -1,13 +1,16 @@
 /**
  * Per-branch stock ledger (FI). Every quantity change is recorded as a signed
  * stock_movement AND applied to the inventory level in the SAME transaction.
- * `recordMovement` MUST be called inside a caller-owned db.transaction (e.g. the
- * sale transaction) so stock and the sale commit atomically.
+ * `recordMovement` is called by SaleService inside the sale transaction; the
+ * manual operations (adjust, stockIn) own their own transaction + audit entry.
  */
 import type { DB } from '../db/connection';
 import type { StockMovementType } from '@shared/constants';
+import type { InventoryLevelView } from '@shared/types/domain';
 import { newId } from '../util/id';
 import { nowIso } from '../util/time';
+import { Errors } from '../errors';
+import type { AuditService } from './audit-service';
 import type { OutboxService } from './outbox-service';
 
 export interface MovementInput {
@@ -25,6 +28,7 @@ export class InventoryService {
   constructor(
     private readonly db: DB,
     private readonly outbox: OutboxService,
+    private readonly audit: AuditService,
   ) {}
 
   getLevel(productId: string, branchId: string): number {
@@ -95,5 +99,99 @@ export class InventoryService {
         quantity: input.quantity,
       });
     }
+  }
+
+  /** Receive new stock (FI-04). */
+  stockIn(
+    params: { productId: string; branchId: string; quantity: number; notes?: string | null },
+    actorId: string,
+  ): void {
+    if (params.quantity <= 0) throw Errors.validation('Stock-in quantity must be greater than zero.');
+    this.db.transaction(() => {
+      this.recordMovement({
+        productId: params.productId,
+        branchId: params.branchId,
+        type: 'stock_in',
+        quantity: params.quantity,
+        userId: actorId,
+        notes: params.notes ?? null,
+      });
+      this.audit.record({
+        userId: actorId,
+        action: 'stock_in',
+        entityType: 'product',
+        entityId: params.productId,
+        newValue: { quantity: params.quantity },
+      });
+    })();
+  }
+
+  /** Set stock to an absolute counted quantity with a reason (FI-03). */
+  adjust(
+    params: { productId: string; branchId: string; newQuantity: number; reason: string; notes?: string | null },
+    actorId: string,
+  ): void {
+    if (!params.reason.trim()) throw Errors.validation('A reason is required for stock adjustments.');
+    const current = this.getLevel(params.productId, params.branchId);
+    const delta = params.newQuantity - current;
+    if (delta === 0) return;
+    this.db.transaction(() => {
+      this.recordMovement({
+        productId: params.productId,
+        branchId: params.branchId,
+        type: 'adjustment',
+        quantity: delta,
+        reason: params.reason,
+        userId: actorId,
+        notes: params.notes ?? null,
+      });
+      this.audit.record({
+        userId: actorId,
+        action: 'stock_adjust',
+        entityType: 'product',
+        entityId: params.productId,
+        oldValue: { quantity: current },
+        newValue: { quantity: params.newQuantity, reason: params.reason },
+      });
+    })();
+  }
+
+  /** Current stock for every active product at a branch, with last movement (FI-06). */
+  levels(branchId: string): InventoryLevelView[] {
+    const rows = this.db
+      .prepare(
+        `SELECT p.id AS product_id, p.name, p.category, p.unit_of_measure,
+                p.low_stock_threshold, COALESCE(i.quantity, 0) AS quantity,
+                (SELECT MAX(datetime) FROM stock_movements m
+                   WHERE m.product_id = p.id AND m.branch_id = @branch) AS last_movement
+         FROM products p
+         LEFT JOIN inventory i ON i.product_id = p.id AND i.branch_id = @branch
+         WHERE p.active = 1
+         ORDER BY p.name`,
+      )
+      .all({ branch: branchId }) as {
+      product_id: string;
+      name: string;
+      category: string;
+      unit_of_measure: string;
+      low_stock_threshold: number;
+      quantity: number;
+      last_movement: string | null;
+    }[];
+    return rows.map((r) => ({
+      productId: r.product_id,
+      name: r.name,
+      category: r.category,
+      unitOfMeasure: r.unit_of_measure,
+      quantity: r.quantity,
+      lowStockThreshold: r.low_stock_threshold,
+      isLow: r.low_stock_threshold > 0 && r.quantity <= r.low_stock_threshold,
+      lastMovement: r.last_movement,
+    }));
+  }
+
+  /** Products at or below their low-stock threshold (FI-05). */
+  lowStock(branchId: string): InventoryLevelView[] {
+    return this.levels(branchId).filter((l) => l.isLow);
   }
 }

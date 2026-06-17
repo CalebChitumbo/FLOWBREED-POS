@@ -20,6 +20,7 @@ import type {
   PriceHistoryEntry,
   TillSession,
   Transaction,
+  InventoryLevelView,
 } from '../types/domain';
 import type { ReceiptData } from '../types/receipt';
 
@@ -147,6 +148,18 @@ export interface IpcContract {
   };
   'product:removeBarcode': { request: { token: string; barcodeId: string }; response: Ok };
   'product:priceHistory': { request: { token: string; productId: string }; response: PriceHistoryEntry[] };
+
+  // ---- Inventory (M4, manager/administrator) ----
+  'inventory:levels': { request: { token: string }; response: InventoryLevelView[] };
+  'inventory:lowStock': { request: { token: string }; response: InventoryLevelView[] };
+  'inventory:stockIn': {
+    request: { token: string; productId: string; quantity: number; notes?: string | null };
+    response: Ok;
+  };
+  'inventory:adjust': {
+    request: { token: string; productId: string; newQuantity: number; reason: string; notes?: string | null };
+    response: Ok;
+  };
 }
 
 export interface IpcEvents {
@@ -204,6 +217,10 @@ export const IPC_CHANNELS = [
   'product:addBarcode',
   'product:removeBarcode',
   'product:priceHistory',
+  'inventory:levels',
+  'inventory:lowStock',
+  'inventory:stockIn',
+  'inventory:adjust',
 ] as const satisfies readonly IpcChannel[];
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */

@@ -152,3 +152,15 @@ export interface AuditEntry {
   newValue: string | null;
   datetime: string;
 }
+
+/** A product's current stock at a branch, for the inventory + count-report views. */
+export interface InventoryLevelView {
+  productId: string;
+  name: string;
+  category: string;
+  unitOfMeasure: string;
+  quantity: number;
+  lowStockThreshold: number;
+  isLow: boolean;
+  lastMovement: string | null;
+}

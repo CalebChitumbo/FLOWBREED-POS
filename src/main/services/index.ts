@@ -39,7 +39,7 @@ export function buildServices(db: DB): Services {
   const auth = new AuthService(users, sessions, audit);
   const products = new ProductService(db, audit, outbox);
   const branches = new BranchService(db, config, outbox);
-  const inventory = new InventoryService(db, outbox);
+  const inventory = new InventoryService(db, outbox, audit);
   const tills = new TillSessionService(db, audit, outbox);
   const sales = new SaleService(db, products, branches, inventory, tills, config, audit, outbox);
 

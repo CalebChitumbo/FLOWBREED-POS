@@ -6,6 +6,7 @@ import { useIdleLock } from '../hooks/useIdleLock';
 import { UsersPage } from '../pages/UsersPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { CheckoutPage } from '../pages/CheckoutPage';
+import { InventoryPage } from '../pages/InventoryPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
@@ -97,16 +98,7 @@ function Shell() {
           <Route path="/" element={<Navigate to="/checkout" replace />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
-          <Route
-            path="/inventory"
-            element={
-              <PlaceholderPage
-                title="Inventory"
-                milestone="M4"
-                summary="Per-branch stock levels, adjustments, stock-in and low-stock alerts."
-              />
-            }
-          />
+          <Route path="/inventory" element={<RoleGuard roles={MANAGER} element={<InventoryPage />} />} />
           <Route
             path="/sessions"
             element={
