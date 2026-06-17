@@ -1,7 +1,10 @@
-import { AppShell, Badge, Button, Group, Menu, NavLink, Text, Title } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { AppShell, Badge, Button, Group, Menu, NavLink, Text, Title, Tooltip } from '@mantine/core';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { Role } from '@shared/constants';
-import { useAuthStore } from '../stores/auth';
+import type { SyncStatus } from '@shared/ipc/contract';
+import { invoke } from '../api/client';
+import { requireToken, useAuthStore } from '../stores/auth';
 import { useIdleLock } from '../hooks/useIdleLock';
 import { UsersPage } from '../pages/UsersPage';
 import { ProductsPage } from '../pages/ProductsPage';
@@ -49,15 +52,45 @@ function NavItems() {
   );
 }
 
+function SyncIndicator() {
+  const [status, setStatus] = useState<SyncStatus>({ online: false, pending: 0 });
+
+  useEffect(() => {
+    invoke('sync:status', { token: requireToken() })
+      .then(setStatus)
+      .catch(() => undefined);
+    const off = window.api.on('event:syncStatus', (s) => setStatus(s));
+    return off;
+  }, []);
+
+  async function syncNow() {
+    setStatus(await invoke('sync:now', { token: requireToken() }).catch(() => status));
+  }
+
+  const label = status.online ? 'Online' : 'Offline';
+  const color = status.online ? 'green' : 'gray';
+  return (
+    <Tooltip label={status.pending > 0 ? `${status.pending} change(s) waiting to sync` : 'All changes synced'}>
+      <Badge
+        variant="light"
+        color={status.pending > 0 ? 'yellow' : color}
+        style={{ cursor: 'pointer' }}
+        onClick={() => void syncNow()}
+      >
+        {label}
+        {status.pending > 0 ? ` · ${status.pending} pending` : ''}
+      </Badge>
+    </Tooltip>
+  );
+}
+
 function Header() {
   const { user, lock, logout } = useAuthStore();
   return (
     <Group h="100%" px="md" justify="space-between">
       <Title order={4}>Flowbreeds POS</Title>
       <Group gap="sm">
-        <Badge variant="light" color="gray">
-          Offline-first
-        </Badge>
+        <SyncIndicator />
         <Menu position="bottom-end" withArrow>
           <Menu.Target>
             <Button variant="subtle">

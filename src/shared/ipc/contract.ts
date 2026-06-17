@@ -32,6 +32,11 @@ export interface OpenSessionView extends TillSession {
   cashierName: string;
 }
 
+export interface SyncStatus {
+  online: boolean;
+  pending: number;
+}
+
 export interface SaleItemPayload {
   productId: string;
   quantity: number;
@@ -183,6 +188,10 @@ export interface IpcContract {
     };
     response: StockMovementView[];
   };
+
+  // ---- Sync (M7) ----
+  'sync:status': { request: { token: string }; response: SyncStatus };
+  'sync:now': { request: { token: string }; response: SyncStatus };
 }
 
 export interface IpcEvents {
@@ -248,6 +257,8 @@ export const IPC_CHANNELS = [
   'report:sales',
   'report:transactions',
   'report:stockMovements',
+  'sync:status',
+  'sync:now',
 ] as const satisfies readonly IpcChannel[];
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */

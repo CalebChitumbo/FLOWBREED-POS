@@ -12,6 +12,7 @@ import { registerProductHandlers } from './products';
 import { registerSaleHandlers } from './sales';
 import { registerInventoryHandlers } from './inventory';
 import { registerReportHandlers } from './reports';
+import { registerSyncHandlers } from './sync';
 
 export function registerAllHandlers(): void {
   registerHandler('app:info', () => ({
@@ -34,4 +35,5 @@ export function registerAllHandlers(): void {
   registerSaleHandlers();
   registerInventoryHandlers();
   registerReportHandlers();
+  registerSyncHandlers();
 }

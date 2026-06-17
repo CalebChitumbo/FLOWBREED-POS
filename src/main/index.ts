@@ -15,8 +15,13 @@ import { runMigrations } from './db/migrate';
 import { initServices } from './services';
 import { PrinterService, setPrinter } from './printer/printer-service';
 import { FilePrinterTransport } from './printer/file-transport';
+import { SyncEngine } from './sync/engine';
+import { NullTransport } from './sync/transport';
+import { setSyncEngine, getSyncEngine } from './sync';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
+import { CONFIG_KEYS } from '@shared/constants';
+import type { SyncStatus } from '@shared/ipc/contract';
 import { log } from './logger';
 
 const RENDERER_DIR = join(__dirname, '../renderer');
@@ -89,6 +94,12 @@ function applyDevCsp(): void {
   });
 }
 
+function broadcastSyncStatus(status: SyncStatus): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('event:syncStatus', status);
+  }
+}
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1280,
@@ -125,9 +136,14 @@ app.whenReady().then(() => {
     const dbPath = join(app.getPath('userData'), 'flowbreeds-pos.db');
     const db = initDatabase(dbPath);
     const schemaVersion = runMigrations(db);
-    initServices(db);
+    const services = initServices(db);
     // Dev/Linux uses the file-preview transport; Windows swaps in ESC/POS (M8).
     setPrinter(new PrinterService(new FilePrinterTransport()));
+    // NullTransport until a Firebase project is configured (M10): the outbox
+    // accumulates safely and the UI shows offline + pending.
+    const engine = new SyncEngine(db, new NullTransport(), services.config, broadcastSyncStatus);
+    setSyncEngine(engine);
+    engine.start(services.config.getNumber(CONFIG_KEYS.syncIntervalMs, 30_000));
     log.info(`Local DB ready at ${dbPath} (schema v${schemaVersion})`);
   } catch (err) {
     log.error('Fatal: failed to initialise database', err);
@@ -152,5 +168,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  try {
+    getSyncEngine().stop();
+  } catch {
+    /* engine may not have started */
+  }
   closeDatabase();
 });
