@@ -8,6 +8,7 @@ import { ProductsPage } from '../pages/ProductsPage';
 import { CheckoutPage } from '../pages/CheckoutPage';
 import { InventoryPage } from '../pages/InventoryPage';
 import { SessionsPage } from '../pages/SessionsPage';
+import { ReportsPage } from '../pages/ReportsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
@@ -101,16 +102,7 @@ function Shell() {
           <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
           <Route path="/inventory" element={<RoleGuard roles={MANAGER} element={<InventoryPage />} />} />
           <Route path="/sessions" element={<RoleGuard roles={MANAGER} element={<SessionsPage />} />} />
-          <Route
-            path="/reports"
-            element={
-              <PlaceholderPage
-                title="Reports"
-                milestone="M6"
-                summary="Daily and date-range sales, transaction history and stock movement reports."
-              />
-            }
-          />
+          <Route path="/reports" element={<RoleGuard roles={MANAGER} element={<ReportsPage />} />} />
           <Route path="/users" element={<RoleGuard roles={ADMIN} element={<UsersPage />} />} />
           <Route
             path="/settings"

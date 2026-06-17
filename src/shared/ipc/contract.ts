@@ -24,6 +24,8 @@ import type {
   InventoryLevelView,
 } from '../types/domain';
 import type { ReceiptData } from '../types/receipt';
+import type { SalesReport, StockMovementView, TransactionFilter } from '../types/report';
+import type { StockMovementType } from '../constants';
 
 /** An open session enriched with the cashier's name (manager overview). */
 export interface OpenSessionView extends TillSession {
@@ -167,6 +169,20 @@ export interface IpcContract {
     request: { token: string; productId: string; newQuantity: number; reason: string; notes?: string | null };
     response: Ok;
   };
+
+  // ---- Reports (M6, manager/administrator) ----
+  'report:sales': { request: { token: string; start: string; end: string }; response: SalesReport };
+  'report:transactions': { request: { token: string; filter: TransactionFilter }; response: Transaction[] };
+  'report:stockMovements': {
+    request: {
+      token: string;
+      start?: string;
+      end?: string;
+      type?: StockMovementType;
+      limit?: number;
+    };
+    response: StockMovementView[];
+  };
 }
 
 export interface IpcEvents {
@@ -229,6 +245,9 @@ export const IPC_CHANNELS = [
   'inventory:lowStock',
   'inventory:stockIn',
   'inventory:adjust',
+  'report:sales',
+  'report:transactions',
+  'report:stockMovements',
 ] as const satisfies readonly IpcChannel[];
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */

@@ -15,6 +15,7 @@ import { BranchService } from './branch-service';
 import { InventoryService } from './inventory-service';
 import { TillSessionService } from './till-session-service';
 import { SaleService } from './sale-service';
+import { ReportService } from './report-service';
 
 export interface Services {
   sessions: SessionManager;
@@ -28,6 +29,7 @@ export interface Services {
   inventory: InventoryService;
   tills: TillSessionService;
   sales: SaleService;
+  reports: ReportService;
 }
 
 export function buildServices(db: DB): Services {
@@ -42,11 +44,25 @@ export function buildServices(db: DB): Services {
   const inventory = new InventoryService(db, outbox, audit);
   const tills = new TillSessionService(db, audit, outbox);
   const sales = new SaleService(db, products, branches, inventory, tills, config, audit, outbox);
+  const reports = new ReportService(db);
 
   // Every install (and every test DB) is tagged to a branch.
   branches.ensureDefault();
 
-  return { sessions, config, audit, outbox, users, auth, products, branches, inventory, tills, sales };
+  return {
+    sessions,
+    config,
+    audit,
+    outbox,
+    users,
+    auth,
+    products,
+    branches,
+    inventory,
+    tills,
+    sales,
+    reports,
+  };
 }
 
 let services: Services | null = null;
