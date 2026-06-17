@@ -69,8 +69,18 @@ export function registerSaleHandlers(): void {
 
   registerHandler('session:listOpen', (req) => {
     const { token } = z.object({ token: tokenStr }).parse(req);
+    const { sessions, tills, users } = getServices();
+    authorize(sessions, token, 'manager', 'administrator');
+    return tills.listOpen().map((s) => ({
+      ...s,
+      cashierName: users.findById(s.cashierId)?.username ?? s.cashierId,
+    }));
+  });
+
+  registerHandler('session:summary', (req) => {
+    const { token, sessionId } = z.object({ token: tokenStr, sessionId: z.string().min(1) }).parse(req);
     authorize(getServices().sessions, token, 'manager', 'administrator');
-    return getServices().tills.listOpen();
+    return getServices().tills.computeTotals(sessionId);
   });
 
   // ---- Sales ----

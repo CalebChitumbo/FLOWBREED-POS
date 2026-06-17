@@ -19,10 +19,16 @@ import type {
   Barcode,
   PriceHistoryEntry,
   TillSession,
+  TillSessionTotals,
   Transaction,
   InventoryLevelView,
 } from '../types/domain';
 import type { ReceiptData } from '../types/receipt';
+
+/** An open session enriched with the cashier's name (manager overview). */
+export interface OpenSessionView extends TillSession {
+  cashierName: string;
+}
 
 export interface SaleItemPayload {
   productId: string;
@@ -112,7 +118,8 @@ export interface IpcContract {
   'session:open': { request: { token: string; openingFloat: number }; response: TillSession };
   'session:current': { request: { token: string }; response: TillSession | null };
   'session:close': { request: { token: string; sessionId?: string }; response: TillSession };
-  'session:listOpen': { request: { token: string }; response: TillSession[] };
+  'session:listOpen': { request: { token: string }; response: OpenSessionView[] };
+  'session:summary': { request: { token: string; sessionId: string }; response: TillSessionTotals };
 
   // ---- Sales / checkout (M3) ----
   'sale:create': { request: { token: string; input: CreateSalePayload }; response: SaleResultPayload };
@@ -199,6 +206,7 @@ export const IPC_CHANNELS = [
   'session:current',
   'session:close',
   'session:listOpen',
+  'session:summary',
   'sale:create',
   'sale:refund',
   'sale:get',

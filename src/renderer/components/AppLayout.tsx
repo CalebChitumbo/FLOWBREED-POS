@@ -7,6 +7,7 @@ import { UsersPage } from '../pages/UsersPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { CheckoutPage } from '../pages/CheckoutPage';
 import { InventoryPage } from '../pages/InventoryPage';
+import { SessionsPage } from '../pages/SessionsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
@@ -23,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/checkout', label: 'Checkout' },
   { path: '/products', label: 'Products', roles: MANAGER },
   { path: '/inventory', label: 'Inventory', roles: MANAGER },
-  { path: '/sessions', label: 'Till Sessions' },
+  { path: '/sessions', label: 'Till Sessions', roles: MANAGER },
   { path: '/reports', label: 'Reports', roles: MANAGER },
   { path: '/users', label: 'Users', roles: ADMIN },
   { path: '/settings', label: 'Settings', roles: ADMIN },
@@ -99,16 +100,7 @@ function Shell() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
           <Route path="/inventory" element={<RoleGuard roles={MANAGER} element={<InventoryPage />} />} />
-          <Route
-            path="/sessions"
-            element={
-              <PlaceholderPage
-                title="Till Sessions"
-                milestone="M5"
-                summary="Open/close cashier sessions with float and end-of-day reconciliation."
-              />
-            }
-          />
+          <Route path="/sessions" element={<RoleGuard roles={MANAGER} element={<SessionsPage />} />} />
           <Route
             path="/reports"
             element={
