@@ -18,6 +18,7 @@ import { FilePrinterTransport } from './printer/file-transport';
 import { SyncEngine } from './sync/engine';
 import { NullTransport } from './sync/transport';
 import { setSyncEngine, getSyncEngine } from './sync';
+import { initAutoUpdate } from './updater';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
 import { CONFIG_KEYS } from '@shared/constants';
@@ -157,6 +158,7 @@ app.whenReady().then(() => {
   registerAllHandlers();
   mountIpc();
   createWindow();
+  initAutoUpdate();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

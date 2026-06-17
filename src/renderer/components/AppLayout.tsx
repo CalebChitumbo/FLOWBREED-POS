@@ -12,7 +12,7 @@ import { CheckoutPage } from '../pages/CheckoutPage';
 import { InventoryPage } from '../pages/InventoryPage';
 import { SessionsPage } from '../pages/SessionsPage';
 import { ReportsPage } from '../pages/ReportsPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { SettingsPage } from '../pages/SettingsPage';
 
 const DEFAULT_LOCK_MS = 5 * 60 * 1000;
 const MANAGER: Role[] = ['manager', 'administrator'];
@@ -115,7 +115,13 @@ function Header() {
 function Shell() {
   const lock = useAuthStore((s) => s.lock);
   const locked = useAuthStore((s) => s.locked);
-  useIdleLock(DEFAULT_LOCK_MS, lock, !locked);
+  const [lockMs, setLockMs] = useState(DEFAULT_LOCK_MS);
+  useEffect(() => {
+    invoke('app:lockTimeout', { token: requireToken() })
+      .then((r) => setLockMs(r.ms))
+      .catch(() => undefined);
+  }, []);
+  useIdleLock(lockMs, lock, !locked);
 
   return (
     <AppShell header={{ height: 56 }} navbar={{ width: 240, breakpoint: 'xs' }} padding="md">
@@ -137,16 +143,7 @@ function Shell() {
           <Route path="/sessions" element={<RoleGuard roles={MANAGER} element={<SessionsPage />} />} />
           <Route path="/reports" element={<RoleGuard roles={MANAGER} element={<ReportsPage />} />} />
           <Route path="/users" element={<RoleGuard roles={ADMIN} element={<UsersPage />} />} />
-          <Route
-            path="/settings"
-            element={
-              <PlaceholderPage
-                title="Settings"
-                milestone="M8"
-                summary="Branch, printer, sync and security configuration."
-              />
-            }
-          />
+          <Route path="/settings" element={<RoleGuard roles={ADMIN} element={<SettingsPage />} />} />
           <Route path="*" element={<Navigate to="/checkout" replace />} />
         </Routes>
       </AppShell.Main>

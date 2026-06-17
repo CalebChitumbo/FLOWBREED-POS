@@ -22,6 +22,7 @@ import type {
   TillSessionTotals,
   Transaction,
   InventoryLevelView,
+  Branch,
 } from '../types/domain';
 import type { ReceiptData } from '../types/receipt';
 import type { SalesReport, StockMovementView, TransactionFilter } from '../types/report';
@@ -192,6 +193,15 @@ export interface IpcContract {
   // ---- Sync (M7) ----
   'sync:status': { request: { token: string }; response: SyncStatus };
   'sync:now': { request: { token: string }; response: SyncStatus };
+
+  // ---- Settings / system (M8) ----
+  'config:get': { request: { token: string; keys: string[] }; response: Record<string, string | null> };
+  'config:set': { request: { token: string; key: string; value: string }; response: Ok };
+  'branch:get': { request: { token: string }; response: Branch };
+  'branch:rename': { request: { token: string; name: string }; response: Branch };
+  'app:lockTimeout': { request: { token: string }; response: { ms: number } };
+  'backup:run': { request: { token: string }; response: { path: string | null } };
+  'update:check': { request: { token: string }; response: { available: boolean; version: string | null } };
 }
 
 export interface IpcEvents {
@@ -259,6 +269,13 @@ export const IPC_CHANNELS = [
   'report:stockMovements',
   'sync:status',
   'sync:now',
+  'config:get',
+  'config:set',
+  'branch:get',
+  'branch:rename',
+  'app:lockTimeout',
+  'backup:run',
+  'update:check',
 ] as const satisfies readonly IpcChannel[];
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */
