@@ -1,23 +1,19 @@
 /**
- * Password hashing with argon2id (NS-01). Parameters tuned for an interactive
- * desktop login. Verification never throws — a malformed/wrong hash returns false.
+ * Password hashing (NS-01). Uses bcrypt (bcryptjs, pure JavaScript) so there is no
+ * native module to compile against the older Electron 22 runtime required for
+ * Windows 7 support. Verification never throws — a malformed/wrong hash returns false.
  */
-import argon2 from 'argon2';
+import bcrypt from 'bcryptjs';
 
-const OPTIONS: argon2.Options = {
-  type: argon2.argon2id,
-  memoryCost: 65536, // 64 MB
-  timeCost: 3,
-  parallelism: 1,
-};
+const ROUNDS = 10;
 
 export function hashPassword(plain: string): Promise<string> {
-  return argon2.hash(plain, OPTIONS);
+  return bcrypt.hash(plain, ROUNDS);
 }
 
 export async function verifyPassword(hash: string, plain: string): Promise<boolean> {
   try {
-    return await argon2.verify(hash, plain);
+    return await bcrypt.compare(plain, hash);
   } catch {
     return false;
   }

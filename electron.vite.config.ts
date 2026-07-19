@@ -11,6 +11,8 @@ export default defineConfig({
       alias: { '@shared': shared },
     },
     build: {
+      // Electron 22 ships Node 16.
+      target: 'node16',
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts') },
       },
@@ -22,6 +24,7 @@ export default defineConfig({
       alias: { '@shared': shared },
     },
     build: {
+      target: 'node16',
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
       },
@@ -37,6 +40,8 @@ export default defineConfig({
     },
     plugins: [react()],
     build: {
+      // Electron 22 ships Chromium 108 — transpile down so the UI runs on Win 7.
+      target: 'chrome108',
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/renderer/index.html') },
       },

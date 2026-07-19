@@ -58,24 +58,31 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function registerAppProtocol(): void {
-  protocol.handle('app', async (request) => {
-    const { pathname } = new URL(request.url);
-    let rel = decodeURIComponent(pathname);
-    if (rel === '/' || rel === '') rel = '/index.html';
-    const filePath = normalize(join(RENDERER_DIR, rel));
-    if (!filePath.startsWith(RENDERER_DIR)) {
-      return new Response('Forbidden', { status: 403 });
-    }
-    try {
-      const data = await readFile(filePath);
-      const headers: Record<string, string> = {
-        'content-type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
-      };
-      if (filePath.endsWith('index.html')) headers['content-security-policy'] = PROD_CSP;
-      return new Response(new Uint8Array(data), { headers });
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
+  // Electron 22 (Windows 7 support) predates protocol.handle(); use the older
+  // registerBufferProtocol, which still lets us set the CSP header on the document.
+  protocol.registerBufferProtocol('app', (request, callback) => {
+    void (async () => {
+      const { pathname } = new URL(request.url);
+      let rel = decodeURIComponent(pathname);
+      if (rel === '/' || rel === '') rel = '/index.html';
+      const filePath = normalize(join(RENDERER_DIR, rel));
+      if (!filePath.startsWith(RENDERER_DIR)) {
+        callback({ error: -6 }); // net::ERR_FILE_NOT_FOUND
+        return;
+      }
+      try {
+        const data = await readFile(filePath);
+        const headers: Record<string, string> = {};
+        if (filePath.endsWith('index.html')) headers['Content-Security-Policy'] = PROD_CSP;
+        callback({
+          mimeType: MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+          data,
+          headers,
+        });
+      } catch {
+        callback({ error: -6 });
+      }
+    })();
   });
 }
 

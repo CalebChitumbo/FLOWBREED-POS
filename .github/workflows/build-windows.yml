@@ -1,13 +1,12 @@
 name: Build Windows Installer
 
-# Builds the Flowbreeds POS Windows .exe on GitHub's Windows servers.
-# Run it manually from the Actions tab, or it runs automatically on every push
-# to the working branch and on version tags (v1.0.0, ...).
+# Windows 7-compatible build: Electron 22, 32-bit (ia32).
+# Runs manually from the Actions tab, and automatically on pushes to this branch.
 on:
   workflow_dispatch: {}
   push:
     branches:
-      - claude/great-lovelace-f7q9yf
+      - claude/win7-build
     tags:
       - 'v*'
 
@@ -24,22 +23,24 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Skip native builds against Node 22 here; electron-builder rebuilds them
+      # against Electron 22 (ia32) in the next step.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Rebuild native modules for Electron (Windows)
+      - name: Rebuild native modules for Electron 22 (ia32)
         run: npm run rebuild
 
       - name: Build app bundles
         run: npm run build
 
-      - name: Package Windows installer (NSIS)
-        run: npx electron-builder --win nsis --publish never
+      - name: Package Windows installer (NSIS, 32-bit)
+        run: npx electron-builder --win nsis --ia32 --publish never
 
       - name: Upload the installer
         uses: actions/upload-artifact@v4
         with:
-          name: flowbreeds-pos-windows-installer
+          name: flowbreeds-pos-win7-installer
           path: release/**/*.exe
           if-no-files-found: error
           retention-days: 90

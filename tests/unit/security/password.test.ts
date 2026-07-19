@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword } from '../../../src/main/security/password';
 
-describe('password hashing (argon2id)', () => {
-  it('produces an argon2id hash that is not the plaintext', async () => {
+describe('password hashing (bcrypt)', () => {
+  it('produces a bcrypt hash that is not the plaintext', async () => {
     const hash = await hashPassword('s3cret-pass');
     expect(hash).not.toBe('s3cret-pass');
-    expect(hash.startsWith('$argon2id$')).toBe(true);
+    expect(hash.startsWith('$2')).toBe(true);
   });
 
   it('verifies the correct password', async () => {

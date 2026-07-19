@@ -18,13 +18,13 @@ asarUnpack:
   # Native modules must be unpacked from the asar archive to load at runtime.
   - '**/*.node'
   - node_modules/better-sqlite3/**
-  - node_modules/argon2/**
 
 win:
+  # 32-bit (ia32) so it runs on Windows 7 (incl. 32-bit) as well as 8/10/11.
   target:
     - target: nsis
       arch:
-        - x64
+        - ia32
   artifactName: ${productName}-Setup-${version}.${ext}
 
 nsis:
