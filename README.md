@@ -39,8 +39,10 @@ payload is zod-validated at the MAIN boundary.
 
 **Data:** UUID text primary keys (idempotent cloud sync), money as INTEGER minor
 units (ngwee), ISO-8601 UTC timestamps. Schema: `src/main/db/migrations/001_init.sql`
-(append-only `audit_log` + `price_history` enforced by triggers). A transactional
-**outbox** (`sync_queue`) is written in the same transaction as each domain change.
+plus `002_order_planning.sql` (append-only `audit_log`, `price_history` and
+`order_cost_history` enforced by triggers; closed order plans frozen the same way).
+A transactional **outbox** (`sync_queue`) is written in the same transaction as each
+domain change.
 
 ## Develop (Linux/macOS/Windows)
 
@@ -57,7 +59,7 @@ npm run dev         # launch the app with HMR
 Quality gates:
 
 ```bash
-npm test            # Vitest unit tests (services, sync, security) — 70 passing
+npm test            # Vitest unit tests (services, sync, security) — 97 passing
 npm run typecheck   # tsc for main/preload + renderer
 npm run build       # production bundles
 npm run test:e2e    # Playwright Electron smoke test (needs the Electron-ABI rebuild + a display)
@@ -89,12 +91,45 @@ default "Main Branch" is created automatically). Sign in, then:
 2. **Products** (manager+) — add products, barcodes (multi-barcode + weight-based),
    prices and categories.
 3. **Checkout** — open a till session with a cash float, then scan/sell.
+4. **Order Planning** (manager+) — put your *buying* prices on the price list, then
+   plan orders against them (see below).
+
+## Order Planning (M11)
+
+So the buying is planned on paper figures, not from memory.
+
+**Price list tab** — every item the shop orders, saved with a short **code**
+(`BF01`), what it costs to buy, and the unit it is bought in (kg, box, crate…).
+Changing a cost writes an append-only `order_cost_history` row, so the trend is
+never lost, and items are *retired*, never deleted, so old plans keep their
+history. An item can optionally be linked to the POS product it stocks.
+
+**Order plans tab** — start a plan, then type a **code + quantity** for each thing
+the shop manager asked for; each line is costed from the preset price and the plan
+totals the spend. Record the **cash taken** and the plan tells you what is left.
+Anything not on the price list can go on as a one-off line.
+
+Then:
+
+- **Start shopping** — the plan becomes the shopping list (export it as CSV to
+  carry it).
+- Against each line record what was **actually bought** and **actually paid** —
+  leave a line blank and it counts as going to plan; enter 0 quantity for
+  something you did not buy.
+- **Close & reconcile** — freezes the real spend and the **change to return**
+  (cash taken − spent, shown in red if the order went over).
+
+A closed or cancelled plan is a **permanent record**: the service refuses to edit
+it and the migration's triggers block any UPDATE/DELETE at the storage layer too
+(only the sync engine's `sync_status` bookkeeping is let through). To repeat a
+standing order — or correct a closed one — use **Duplicate**, which copies the
+lines into a fresh draft re-priced at today's costs.
 
 ## Roles
 
 - **Cashier** — checkout, payments, receipts, own till session.
 - **Manager** — + product management, pricing, stock, discount authorisation,
-  reports, close any session.
+  reports, order planning, close any session.
 - **Administrator** — + user management, settings, backup, updates.
 
 ## Hardware
@@ -127,6 +162,7 @@ backups. The app reminds you if the last backup is over a week old.
 | M8 Settings, manual backup, auto-update scaffold | ✅ (NSIS/auto-update run on Windows/CI) |
 | M9 Multi-branch | ◑ architecture complete (everything branch-tagged; products pull-capable). Consolidated cross-branch reporting depends on M10. |
 | M10 Firestore wiring | ☐ requires a Firebase project (see below) |
+| M11 Order planning (order price list, plans, budget vs actual, change) | ✅ |
 
 ## M10: wiring live Firebase (final phase)
 

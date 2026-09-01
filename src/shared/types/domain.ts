@@ -12,6 +12,8 @@ import type {
   TransactionType,
   TransactionStatus,
   SyncStatus,
+  OrderUnit,
+  OrderPlanStatus,
 } from '../constants';
 
 export interface User {
@@ -151,6 +153,78 @@ export interface AuditEntry {
   oldValue: string | null;
   newValue: string | null;
   datetime: string;
+}
+
+/**
+ * An orderable item with its preset purchase cost, filed under a short `code`
+ * the buyer types when planning an order (M11).
+ */
+export interface OrderCatalogueItem {
+  id: string;
+  code: string;
+  name: string;
+  supplier: string | null;
+  unitOfOrder: OrderUnit | string;
+  unitCost: number; // minor units per unit of order
+  packSize: number | null;
+  productId: string | null;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderCostHistoryEntry {
+  id: string;
+  catalogueId: string;
+  oldCost: number;
+  newCost: number;
+  changedBy: string;
+  datetime: string;
+}
+
+/** One line of an order plan. Code/name/cost are snapshotted when the line is added. */
+export interface OrderPlanItem {
+  id: string;
+  planId: string;
+  catalogueId: string | null;
+  code: string;
+  name: string;
+  unitOfOrder: string;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+  /** What was really bought/paid. null = it went exactly as planned. */
+  actualQuantity: number | null;
+  actualUnitCost: number | null;
+  actualLineTotal: number | null;
+  notes: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A shopping trip / supplier order: the budget, the list, and the reconciliation. */
+export interface OrderPlan {
+  id: string;
+  reference: string;
+  title: string;
+  branchId: string;
+  status: OrderPlanStatus;
+  plannedTotal: number;
+  budget: number | null;
+  actualTotal: number | null;
+  changeReturned: number | null;
+  notes: string | null;
+  createdBy: string;
+  createdByName?: string;
+  closedBy: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: OrderPlanItem[];
+  /** Number of lines — filled on list views where items are not loaded. */
+  itemCount?: number;
 }
 
 /** A product's current stock at a branch, for the inventory + count-report views. */

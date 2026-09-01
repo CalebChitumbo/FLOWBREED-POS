@@ -28,14 +28,21 @@ const EXPECTED_TABLES = [
   'audit_log',
   'sync_queue',
   'app_config',
+  'order_catalogue',
+  'order_cost_history',
+  'order_plans',
+  'order_plan_items',
 ];
 
+/** Bump alongside MIGRATIONS whenever a migration is appended. */
+const LATEST_VERSION = 2;
+
 describe('migrations', () => {
-  it('applies 001_init and sets schema version to 1', () => {
+  it('applies every migration and sets the schema version', () => {
     db = openDatabase(':memory:');
     const version = runMigrations(db);
-    expect(version).toBe(1);
-    expect(getSchemaVersion(db)).toBe(1);
+    expect(version).toBe(LATEST_VERSION);
+    expect(getSchemaVersion(db)).toBe(LATEST_VERSION);
   });
 
   it('creates every expected table', () => {
@@ -59,8 +66,16 @@ describe('migrations', () => {
 
   it('is idempotent — re-running does not error or change version', () => {
     db = freshDb();
-    expect(runMigrations(db)).toBe(1);
-    expect(runMigrations(db)).toBe(1);
+    expect(runMigrations(db)).toBe(LATEST_VERSION);
+    expect(runMigrations(db)).toBe(LATEST_VERSION);
+  });
+
+  it('creates the unique order-code index (the typed-code hot path)', () => {
+    db = freshDb();
+    const idx = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_order_cat_code'")
+      .get();
+    expect(idx).toBeTruthy();
   });
 
   it('enforces foreign keys', () => {

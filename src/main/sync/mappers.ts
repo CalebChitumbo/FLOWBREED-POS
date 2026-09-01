@@ -21,6 +21,10 @@ export const TABLE_FOR_ENTITY: Record<string, string> = {
   transaction_item: 'transaction_items',
   stock_movement: 'stock_movements',
   price_history: 'price_history',
+  order_catalogue_item: 'order_catalogue',
+  order_cost_history: 'order_cost_history',
+  order_plan: 'order_plans',
+  order_plan_item: 'order_plan_items',
 };
 
 /** Tables that carry a mutable `sync_status` column (everything except the
@@ -35,6 +39,9 @@ export const HAS_SYNC_STATUS = new Set([
   'transactions',
   'transaction_items',
   'stock_movements',
+  'order_catalogue',
+  'order_plans',
+  'order_plan_items',
 ]);
 
 /** Entities the cloud (head office) may push down to branches (8.2). LWW applies. */

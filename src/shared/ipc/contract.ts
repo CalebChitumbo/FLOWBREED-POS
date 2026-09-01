@@ -12,7 +12,7 @@
  * needs a concrete list to validate against).
  */
 
-import type { Role, PaymentMethod } from '../constants';
+import type { Role, PaymentMethod, OrderPlanStatus } from '../constants';
 import type {
   User,
   Product,
@@ -23,6 +23,9 @@ import type {
   Transaction,
   InventoryLevelView,
   Branch,
+  OrderCatalogueItem,
+  OrderCostHistoryEntry,
+  OrderPlan,
 } from '../types/domain';
 import type { ReceiptData } from '../types/receipt';
 import type { SalesReport, StockMovementView, TransactionFilter } from '../types/report';
@@ -80,6 +83,71 @@ export interface ProductPatch {
   isWeightBased?: boolean;
   lowStockThreshold?: number;
   active?: boolean;
+}
+
+// ---- Order planning (M11) ----
+
+export interface OrderCatalogueInput {
+  code: string;
+  name: string;
+  supplier?: string | null;
+  unitOfOrder: string;
+  unitCost: number; // minor units per unit of order
+  packSize?: number | null;
+  productId?: string | null;
+  notes?: string | null;
+}
+
+export interface OrderCataloguePatch {
+  code?: string;
+  name?: string;
+  supplier?: string | null;
+  unitOfOrder?: string;
+  unitCost?: number;
+  packSize?: number | null;
+  productId?: string | null;
+  notes?: string | null;
+  active?: boolean;
+}
+
+export interface OrderPlanInput {
+  title: string;
+  budget?: number | null;
+  notes?: string | null;
+}
+
+export interface OrderPlanPatch {
+  title?: string;
+  budget?: number | null;
+  notes?: string | null;
+}
+
+export interface OrderLineInput {
+  /** The code typed by the buyer, e.g. "BF01". */
+  code?: string;
+  catalogueId?: string;
+  quantity: number;
+  unitCost?: number;
+  name?: string;
+  unitOfOrder?: string;
+  notes?: string | null;
+  /** One-off line: no order-list lookup; `name` and `unitCost` are required. */
+  adHoc?: boolean;
+}
+
+/** `undefined` leaves a field alone; `null` clears it. */
+export interface OrderLinePatch {
+  quantity?: number;
+  unitCost?: number;
+  actualQuantity?: number | null;
+  actualUnitCost?: number | null;
+  notes?: string | null;
+}
+
+export interface OrderCloseInput {
+  budget?: number | null;
+  actualTotal?: number;
+  notes?: string | null;
 }
 
 export interface AppInfo {
@@ -190,6 +258,38 @@ export interface IpcContract {
     response: StockMovementView[];
   };
 
+  // ---- Order planning (M11, manager/administrator) ----
+  // The order price list: preset purchase costs, each under a short code.
+  'order:catalogueList': { request: { token: string; includeInactive?: boolean }; response: OrderCatalogueItem[] };
+  'order:catalogueSearch': { request: { token: string; query: string }; response: OrderCatalogueItem[] };
+  'order:catalogueFindByCode': { request: { token: string; code: string }; response: OrderCatalogueItem | null };
+  'order:catalogueCreate': { request: { token: string; input: OrderCatalogueInput }; response: OrderCatalogueItem };
+  'order:catalogueUpdate': {
+    request: { token: string; id: string; patch: OrderCataloguePatch };
+    response: OrderCatalogueItem;
+  };
+  'order:costHistory': { request: { token: string; catalogueId: string }; response: OrderCostHistoryEntry[] };
+  // Order plans: the budget / shopping list and its reconciliation.
+  'order:planList': {
+    request: { token: string; status?: OrderPlanStatus; limit?: number };
+    response: OrderPlan[];
+  };
+  'order:planGet': { request: { token: string; id: string }; response: OrderPlan };
+  'order:planCreate': { request: { token: string; input: OrderPlanInput }; response: OrderPlan };
+  'order:planUpdate': { request: { token: string; id: string; patch: OrderPlanPatch }; response: OrderPlan };
+  'order:planAddLine': { request: { token: string; planId: string; input: OrderLineInput }; response: OrderPlan };
+  'order:planUpdateLine': {
+    request: { token: string; lineId: string; patch: OrderLinePatch };
+    response: OrderPlan;
+  };
+  'order:planRemoveLine': { request: { token: string; lineId: string }; response: OrderPlan };
+  'order:planSetStatus': {
+    request: { token: string; id: string; status: 'draft' | 'shopping' | 'cancelled' };
+    response: OrderPlan;
+  };
+  'order:planClose': { request: { token: string; id: string; input: OrderCloseInput }; response: OrderPlan };
+  'order:planDuplicate': { request: { token: string; id: string; title?: string }; response: OrderPlan };
+
   // ---- Sync (M7) ----
   'sync:status': { request: { token: string }; response: SyncStatus };
   'sync:now': { request: { token: string }; response: SyncStatus };
@@ -267,6 +367,22 @@ export const IPC_CHANNELS = [
   'report:sales',
   'report:transactions',
   'report:stockMovements',
+  'order:catalogueList',
+  'order:catalogueSearch',
+  'order:catalogueFindByCode',
+  'order:catalogueCreate',
+  'order:catalogueUpdate',
+  'order:costHistory',
+  'order:planList',
+  'order:planGet',
+  'order:planCreate',
+  'order:planUpdate',
+  'order:planAddLine',
+  'order:planUpdateLine',
+  'order:planRemoveLine',
+  'order:planSetStatus',
+  'order:planClose',
+  'order:planDuplicate',
   'sync:status',
   'sync:now',
   'config:get',
@@ -280,3 +396,19 @@ export const IPC_CHANNELS = [
 
 /** Runtime allow-list — keep in sync with `IpcEvents` keys. */
 export const EVENT_CHANNELS = ['event:syncStatus', 'event:lock'] as const satisfies readonly EventChannel[];
+
+/**
+ * Compile-time exhaustiveness guard. `satisfies` above stops a bogus entry
+ * getting onto the allow-lists; these stop a channel being ADDED to the contract
+ * and forgotten there — which the preload would reject at runtime as BAD_CHANNEL.
+ * If one is missing, the error names it.
+ */
+type Unlisted<Declared extends string, Listed extends string> = Exclude<Declared, Listed>;
+
+export const ALL_CHANNELS_LISTED: Unlisted<IpcChannel, (typeof IPC_CHANNELS)[number]> extends never
+  ? true
+  : ['channel missing from IPC_CHANNELS:', Unlisted<IpcChannel, (typeof IPC_CHANNELS)[number]>] = true;
+
+export const ALL_EVENTS_LISTED: Unlisted<EventChannel, (typeof EVENT_CHANNELS)[number]> extends never
+  ? true
+  : ['event missing from EVENT_CHANNELS:', Unlisted<EventChannel, (typeof EVENT_CHANNELS)[number]>] = true;
