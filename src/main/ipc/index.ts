@@ -12,6 +12,7 @@ import { registerProductHandlers } from './products';
 import { registerSaleHandlers } from './sales';
 import { registerInventoryHandlers } from './inventory';
 import { registerReportHandlers } from './reports';
+import { registerOrderHandlers } from './orders';
 import { registerSyncHandlers } from './sync';
 import { registerSystemHandlers } from './system';
 
@@ -36,6 +37,7 @@ export function registerAllHandlers(): void {
   registerSaleHandlers();
   registerInventoryHandlers();
   registerReportHandlers();
+  registerOrderHandlers();
   registerSyncHandlers();
   registerSystemHandlers();
 }

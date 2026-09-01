@@ -29,6 +29,20 @@ export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number];
 export const SYNC_STATUSES = ['pending', 'synced', 'failed'] as const;
 export type SyncStatus = (typeof SYNC_STATUSES)[number];
 
+/** How an item is bought from the supplier (order planning). Extensible. */
+export const ORDER_UNITS = ['each', 'kg', 'box', 'crate', 'bag', 'tray', 'litre'] as const;
+export type OrderUnit = (typeof ORDER_UNITS)[number];
+
+/**
+ * Order plan lifecycle: draft (still planning) -> shopping (cash taken, buying)
+ * -> closed (reconciled; a permanent record). `cancelled` is the abandoned end state.
+ */
+export const ORDER_PLAN_STATUSES = ['draft', 'shopping', 'closed', 'cancelled'] as const;
+export type OrderPlanStatus = (typeof ORDER_PLAN_STATUSES)[number];
+
+/** A plan in one of these states is a permanent record and can no longer be edited. */
+export const FINAL_ORDER_PLAN_STATUSES: readonly OrderPlanStatus[] = ['closed', 'cancelled'];
+
 /**
  * Zambian Kwacha. All money is stored as INTEGER minor units (ngwee), never floats.
  * 1 Kwacha = 100 ngwee.

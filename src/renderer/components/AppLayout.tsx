@@ -10,6 +10,7 @@ import { UsersPage } from '../pages/UsersPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { CheckoutPage } from '../pages/CheckoutPage';
 import { InventoryPage } from '../pages/InventoryPage';
+import { OrderPlanningPage } from '../pages/OrderPlanningPage';
 import { SessionsPage } from '../pages/SessionsPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { SettingsPage } from '../pages/SettingsPage';
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/checkout', label: 'Checkout' },
   { path: '/products', label: 'Products', roles: MANAGER },
   { path: '/inventory', label: 'Inventory', roles: MANAGER },
+  { path: '/orders', label: 'Order Planning', roles: MANAGER },
   { path: '/sessions', label: 'Till Sessions', roles: MANAGER },
   { path: '/reports', label: 'Reports', roles: MANAGER },
   { path: '/users', label: 'Users', roles: ADMIN },
@@ -140,6 +142,7 @@ function Shell() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/products" element={<RoleGuard roles={MANAGER} element={<ProductsPage />} />} />
           <Route path="/inventory" element={<RoleGuard roles={MANAGER} element={<InventoryPage />} />} />
+          <Route path="/orders" element={<RoleGuard roles={MANAGER} element={<OrderPlanningPage />} />} />
           <Route path="/sessions" element={<RoleGuard roles={MANAGER} element={<SessionsPage />} />} />
           <Route path="/reports" element={<RoleGuard roles={MANAGER} element={<ReportsPage />} />} />
           <Route path="/users" element={<RoleGuard roles={ADMIN} element={<UsersPage />} />} />
