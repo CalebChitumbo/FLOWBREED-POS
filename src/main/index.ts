@@ -56,24 +56,28 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function registerAppProtocol(): void {
-  protocol.handle('app', async (request) => {
+  // registerBufferProtocol rather than protocol.handle: the newer streaming API
+  // (and the global Response it takes) only exists from Electron 25, and this
+  // app targets Electron 22 — the last release that runs on the Windows 7 till.
+  protocol.registerBufferProtocol('app', (request, respond) => {
     const { pathname } = new URL(request.url);
     let rel = decodeURIComponent(pathname);
     if (rel === '/' || rel === '') rel = '/index.html';
     const filePath = normalize(join(RENDERER_DIR, rel));
     if (!filePath.startsWith(RENDERER_DIR)) {
-      return new Response('Forbidden', { status: 403 });
+      respond({ statusCode: 403, data: Buffer.from('Forbidden') });
+      return;
     }
-    try {
-      const data = await readFile(filePath);
-      const headers: Record<string, string> = {
-        'content-type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
-      };
-      if (filePath.endsWith('index.html')) headers['content-security-policy'] = PROD_CSP;
-      return new Response(new Uint8Array(data), { headers });
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
+    readFile(filePath).then(
+      (data) => {
+        const headers: Record<string, string> = {
+          'content-type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+        };
+        if (filePath.endsWith('index.html')) headers['content-security-policy'] = PROD_CSP;
+        respond({ headers, data });
+      },
+      () => respond({ statusCode: 404, data: Buffer.from('Not found') }),
+    );
   });
 }
 

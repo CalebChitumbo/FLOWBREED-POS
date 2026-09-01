@@ -13,7 +13,7 @@ sync target and is never required for day-to-day operation.
 
 | Concern | Choice |
 |---|---|
-| Shell | Electron 42 (hardened: contextIsolation, sandbox, no nodeIntegration, header CSP, app:// scheme) |
+| Shell | Electron **22.3.27, pinned** — the last Electron that runs on Windows 7, see *Windows 7 support* below (hardened: contextIsolation, sandbox, no nodeIntegration, header CSP, app:// scheme) |
 | UI | React 19 + TypeScript + Vite (electron-vite), Mantine, Zustand, React Router |
 | Local DB | better-sqlite3 (WAL, foreign keys) in the MAIN process |
 | Auth | argon2id hashing, in-memory session tokens, MAIN-side role gate |
@@ -45,6 +45,12 @@ units (ngwee), ISO-8601 UTC timestamps. Schema: `src/main/db/migrations/001_init
 
 ## Develop (Linux/macOS/Windows)
 
+> **Use Node 18–20 for development.** The shipped better-sqlite3 is pinned to
+> 9.6.0 for Windows 7/Electron 22 support and only installs on Node 18–20. On a
+> newer Node, npm skips it (it is an optionalDependency) and the unit tests
+> transparently fall back to the dev-only `better-sqlite3-modern` copy — fine
+> for tests, but `npm run dev` and packaging need the real one.
+
 ```bash
 npm install
 npm run rebuild     # rebuild native modules (better-sqlite3, argon2) for Electron's ABI
@@ -74,10 +80,41 @@ npm ci
 npm run build:win   # electron-vite build && electron-builder --win nsis
 ```
 
-Output: `release/<version>/Flowbreeds POS-Setup-<version>.exe` — a self-contained
-installer (bundles the SQLite engine), with desktop + Start-Menu shortcuts and clean
-uninstall. Set the `publish.url` in `electron-builder.yml` to your update host before
-the first release.
+Output: `release/<version>/Flowbreeds POS-Setup-<version>-<arch>.exe` — self-contained
+installers (bundling the SQLite engine) for **64-bit and 32-bit Windows**, with
+desktop + Start-Menu shortcuts and clean uninstall. Set the `publish.url` in
+`electron-builder.yml` to your update host before the first release.
+
+## Windows 7 support
+
+The tills include a machine that can only run Windows 7, so the app deliberately
+targets the last framework generation that supports it:
+
+- **Electron pinned to 22.3.27** (Chromium 108 renderer, Node 16.17 in main) —
+  the final Electron release that runs on Windows 7/8/8.1. The machine needs
+  **Windows 7 SP1** with the standard platform updates.
+- **better-sqlite3 pinned to 9.6.0** — the last release shipping prebuilt
+  Electron-22 binaries for both `win32-x64` and `win32-ia32`. It lives in
+  `optionalDependencies` so newer dev Nodes don't hard-fail its installer;
+  tests fall back to `better-sqlite3-modern` (see `vitest.config.ts`), and the
+  CI workflow fails loudly if the real one is ever missing from a build.
+- **firebase-admin pinned to v12** (the newest line that supports Node 16), and
+  the build output is transpiled to `chrome108` / `node16.17` targets.
+- The `app://` scheme is served through `protocol.registerBufferProtocol`
+  because the newer `protocol.handle` API only exists from Electron 25.
+- A **32-bit installer** is produced alongside the 64-bit one for old hardware.
+
+**Understand the trade-off:** Electron 22 and Windows 7 stopped receiving
+security fixes years ago. The app's own hardening (sandboxed renderer, strict
+CSP, MAIN-side authorization, encrypted cloud credentials) still applies, but
+the browser engine itself is frozen. Keep the till off the open web, and treat
+this as a bridge until the hardware can be replaced.
+
+**Moving back to a modern Electron later** (when no Windows 7 machine remains):
+bump `electron`, move `better-sqlite3` (^12) back into `dependencies`, drop
+`better-sqlite3-modern`, raise the two build targets in
+`electron.vite.config.ts`, and set the CI workflow's Node back to current.
+Everything else — including the Financial Hub — is version-agnostic.
 
 ## First run
 

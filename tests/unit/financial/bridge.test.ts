@@ -69,9 +69,18 @@ describe('FinancialBridge', () => {
   const docId = (): string => saleDocId(today(), SHOP, 'till-1');
   const future = (secs: number): string => new Date(Date.now() + secs * 1000).toISOString();
 
+  // Timestamps carry millisecond resolution; settle 2ms before each run so a
+  // domain write can never share a stamp with the run's high-water mark, which
+  // keeps the "second run pushes nothing" assertions exact.
+  const settle = () => new Promise((r) => setTimeout(r, 2));
+  const runBridge = async () => {
+    await settle();
+    return bridge.run();
+  };
+
   it('refuses to run until the branch is mapped to a Financial shop', async () => {
     services.config.set(FINHUB_KEYS.shopId, '');
-    const result = await bridge.run();
+    const result = await runBridge();
     expect(result.errors.join(' ')).toMatch(/Financial-app shop/);
     expect(store.shopSales.size).toBe(0);
   });
@@ -82,7 +91,7 @@ describe('FinancialBridge', () => {
       sell(bread.id, 2);
       sell(bread.id, 1);
 
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.errors).toEqual([]);
       expect(result.pushedSaleDays).toEqual([today()]);
 
@@ -99,14 +108,14 @@ describe('FinancialBridge', () => {
     it('is idempotent, and a later sale corrects the same day doc', async () => {
       const bread = addProduct('Bread', 15);
       sell(bread.id, 2);
-      await bridge.run();
+      await runBridge();
       const first = store.shopSales.get(docId())!;
 
-      const quiet = await bridge.run();
+      const quiet = await runBridge();
       expect(quiet.pushedSaleDays).toEqual([]); // nothing changed, nothing pushed
 
       sell(bread.id, 3);
-      await bridge.run();
+      await runBridge();
       const updated = store.shopSales.get(docId())!;
       expect(updated.total).toBe(75);
       expect(store.shopSales.size).toBe(1); // corrected, never duplicated
@@ -121,7 +130,7 @@ describe('FinancialBridge', () => {
         cashier,
       );
 
-      await bridge.run();
+      await runBridge();
       const doc = store.shopSales.get(docId())!;
       // 4 sold − 1 refunded at K15, minus K5 discount -> K40 net
       expect(doc.lines[0].quantity).toBe(3);
@@ -133,11 +142,11 @@ describe('FinancialBridge', () => {
       const bread = addProduct('Bread', 15);
       sell(bread.id, 2);
       store.failWrites = true;
-      const failed = await bridge.run();
+      const failed = await runBridge();
       expect(failed.errors.join(' ')).toMatch(/simulated cloud failure/);
 
       store.failWrites = false;
-      const retry = await bridge.run();
+      const retry = await runBridge();
       expect(retry.pushedSaleDays).toEqual([today()]);
       expect(store.shopSales.get(docId())!.total).toBe(30);
     });
@@ -146,7 +155,7 @@ describe('FinancialBridge', () => {
       const bread = addProduct('Bread', 15);
       db.prepare('UPDATE products SET financial_id = ? WHERE id = ?').run('fin-bread', bread.id);
       sell(bread.id, 2);
-      await bridge.run();
+      await runBridge();
       expect(store.shopSales.get(docId())!.lines[0].productId).toBe('fin-bread');
     });
   });
@@ -166,7 +175,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(60),
         },
       ];
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.pulledProducts).toBe(1);
       const local = db
         .prepare('SELECT * FROM products WHERE financial_id = ?')
@@ -174,7 +183,7 @@ describe('FinancialBridge', () => {
       expect(local).toMatchObject({ name: 'Buns', unit_price: 250, active: 1 });
 
       // Second run: nothing newer than the mark -> no change.
-      const again = await bridge.run();
+      const again = await runBridge();
       expect(again.pulledProducts).toBe(0);
     });
 
@@ -192,7 +201,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(60),
         },
       ];
-      await bridge.run();
+      await runBridge();
       expect(db.prepare('SELECT count(*) AS c FROM products').get()).toMatchObject({ c: 0 });
     });
 
@@ -211,7 +220,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(60),
         },
       ];
-      await bridge.run();
+      await runBridge();
       const row = db.prepare('SELECT financial_id, unit_price FROM products WHERE id = ?').get(bread.id) as {
         financial_id: string;
         unit_price: number;
@@ -237,7 +246,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(60),
         },
       ];
-      await bridge.run();
+      await runBridge();
       const hist = db
         .prepare('SELECT old_price, new_price, changed_by FROM price_history WHERE product_id = ? ORDER BY datetime DESC')
         .get(bread.id) as { old_price: number; new_price: number; changed_by: string };
@@ -260,7 +269,7 @@ describe('FinancialBridge', () => {
           updatedAt: new Date(Date.now() - 60_000).toISOString(), // older than local
         },
       ];
-      await bridge.run();
+      await runBridge();
       const row = db.prepare('SELECT unit_price FROM products WHERE id = ?').get(bread.id) as {
         unit_price: number;
       };
@@ -283,7 +292,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(60),
         },
       ];
-      await bridge.run();
+      await runBridge();
       const row = db.prepare('SELECT active FROM products WHERE id = ?').get(bread.id) as { active: number };
       expect(row.active).toBe(0);
     });
@@ -312,11 +321,11 @@ describe('FinancialBridge', () => {
       db.prepare('UPDATE products SET financial_id = ? WHERE id = ?').run('fin-bread', bread.id);
       seedDelivery(40, future(30));
 
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.appliedMovements).toBe(1);
       expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(40);
 
-      const again = await bridge.run();
+      const again = await runBridge();
       expect(again.appliedMovements).toBe(0);
       expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(40);
     });
@@ -338,7 +347,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(30),
         },
       ];
-      await bridge.run();
+      await runBridge();
       expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(-10);
     });
 
@@ -346,10 +355,10 @@ describe('FinancialBridge', () => {
       const bread = addProduct('Bread', 15);
       db.prepare('UPDATE products SET financial_id = ? WHERE id = ?').run('fin-bread', bread.id);
       seedDelivery(40, future(30));
-      await bridge.run();
+      await runBridge();
 
       seedDelivery(45, future(120)); // edited later at HQ
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.appliedMovements).toBe(0);
       expect(result.warnings.join(' ')).toMatch(/edited in the Financial app/);
       expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(40);
@@ -357,7 +366,7 @@ describe('FinancialBridge', () => {
 
     it('surfaces unlinked delivery lines as warnings', async () => {
       seedDelivery(40, future(30)); // no local product linked to fin-bread
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.warnings.join(' ')).toMatch(/no matching POS product/);
     });
 
@@ -376,7 +385,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(30),
         },
       ];
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.appliedMovements).toBe(0);
       expect(result.warnings).toEqual([]);
     });
@@ -391,14 +400,14 @@ describe('FinancialBridge', () => {
         managerId,
       );
 
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.pushedMovements).toBe(1);
       const [docId, doc] = [...store.stockMovements.entries()][0];
       expect(docId).toMatch(/^pos-/);
       expect(doc).toMatchObject({ kind: 'SUPPLY', source: 'Purchase', toShopId: SHOP });
       expect(doc.lines[0]).toMatchObject({ productId: 'fin-bread', quantity: 30 });
 
-      const again = await bridge.run();
+      const again = await runBridge();
       expect(again.pushedMovements).toBe(0);
     });
 
@@ -411,7 +420,7 @@ describe('FinancialBridge', () => {
         managerId,
       );
 
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.pushedMovements).toBe(2);
       const adhoc = [...store.stockMovements.values()].find((d) => d.kind === 'ADHOC');
       expect(adhoc).toBeTruthy();
@@ -437,7 +446,7 @@ describe('FinancialBridge', () => {
           updatedAt: future(30),
         },
       ];
-      const result = await bridge.run();
+      const result = await runBridge();
       expect(result.appliedMovements).toBe(1);
       expect(result.pushedMovements).toBe(0);
       expect(store.stockMovements.size).toBe(0);

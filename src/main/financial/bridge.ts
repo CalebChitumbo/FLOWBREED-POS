@@ -367,16 +367,23 @@ export class FinancialBridge {
     const sinceMark = config.get(FINHUB_KEYS.lastSaleSyncAt) ?? '';
 
     // Any transaction touched since the mark re-aggregates its WHOLE business
-    // day (voids and late refunds self-heal the day's doc).
+    // day (voids and late refunds self-heal the day's doc). Inclusive compare:
+    // a write in the same millisecond as the mark re-pushes once (idempotent)
+    // instead of being skipped forever.
     const days = (
       db
         .prepare(
           `SELECT DISTINCT date(datetime, ?) AS day FROM transactions
-           WHERE branch_id = ? AND updated_at > ? ORDER BY day`,
+           WHERE branch_id = ? AND updated_at >= ? ORDER BY day`,
         )
         .all(modifier, branchId, sinceMark) as { day: string }[]
     ).map((r) => r.day);
-    if (days.length === 0) return;
+    if (days.length === 0) {
+      // Still advance the mark: a txn stamped exactly at the old mark has been
+      // (re-)pushed by now and must not match forever.
+      config.set(FINHUB_KEYS.lastSaleSyncAt, queryStart);
+      return;
+    }
 
     const linkRows = db
       .prepare('SELECT id, financial_id FROM products WHERE financial_id IS NOT NULL')
@@ -447,13 +454,12 @@ export class FinancialBridge {
                 p.unit_of_measure AS unit, p.financial_id AS financialId
          FROM stock_movements m
          JOIN products p ON p.id = m.product_id
-         WHERE m.branch_id = ? AND m.datetime > ?
+         WHERE m.branch_id = ? AND m.datetime >= ?
            AND m.type IN ('stock_in', 'adjustment')
            AND (m.reference_id IS NULL OR m.reference_id NOT LIKE ?)
          ORDER BY m.datetime`,
       )
       .all(branchId, sinceMark, `${FINHUB_REF_PREFIX}%`) as PosMovementForPush[];
-    if (rows.length === 0) return;
 
     for (const row of rows) {
       const { docId, doc } = posMovementToFinancialDoc(row, shopId, terminalId, nowIso());
