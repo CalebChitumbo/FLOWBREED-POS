@@ -101,6 +101,20 @@ export function SettingsPage() {
     }
   }
 
+  async function testPrint() {
+    setError(null);
+    setMessage(null);
+    try {
+      const token = requireToken();
+      // Use the name in the box even if not saved yet, so trying names is quick.
+      await invoke('config:set', { token, key: CONFIG_KEYS.printerName, value: printerName });
+      await invoke('print:test', { token });
+      setMessage('Test receipt sent to the printer. If nothing came out, check the printer name and its Paper light.');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function checkUpdate() {
     setError(null);
     setMessage(null);
@@ -148,12 +162,18 @@ export function SettingsPage() {
       <Card withBorder radius="md" p="lg">
         <Stack>
           <Title order={4}>Hardware &amp; behaviour</Title>
-          <TextInput
-            label="Receipt printer name"
-            description="The Windows printer name for the thermal printer"
-            value={printerName}
-            onChange={(e) => setPrinterName(e.currentTarget.value)}
-          />
+          <Group align="flex-end">
+            <TextInput
+              style={{ flex: 1 }}
+              label="Receipt printer name"
+              description='Exactly as shown in Windows "Devices and Printers", e.g. EPSON TM-T88V Receipt'
+              value={printerName}
+              onChange={(e) => setPrinterName(e.currentTarget.value)}
+            />
+            <Button variant="light" onClick={testPrint}>
+              Print test receipt
+            </Button>
+          </Group>
           <Group grow>
             <NumberInput
               label="Sync interval (seconds)"

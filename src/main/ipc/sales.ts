@@ -4,8 +4,9 @@ import { registerHandler } from './registry';
 import { getServices } from '../services';
 import { authorize } from '../security/authorize';
 import { getPrinter } from '../printer/printer-service';
+import { composeReceipt } from '../services/receipt';
 import { Errors } from '../errors';
-import { PAYMENT_METHODS } from '@shared/constants';
+import { CONFIG_KEYS, PAYMENT_METHODS } from '@shared/constants';
 
 const tokenStr = z.string().min(1);
 
@@ -125,6 +126,38 @@ export function registerSaleHandlers(): void {
     const last = getPrinter().getLast();
     if (!last) throw Errors.notFound('recent receipt');
     await getPrinter().printReceipt(last, { kickDrawer: false });
+    return { ok: true as const };
+  });
+
+  // Hardware check from Settings: prints a short sample receipt so the printer
+  // can be verified without ringing up a sale. Never kicks the drawer.
+  registerHandler('print:test', async (req) => {
+    const { token } = z.object({ token: tokenStr }).parse(req);
+    const { sessions, config, branches } = getServices();
+    const session = authorize(sessions, token, 'manager', 'administrator');
+    const header = config.getJson<{ businessName?: string; address?: string; contact?: string }>(
+      CONFIG_KEYS.receiptHeader,
+    );
+    const receipt = composeReceipt({
+      businessName: header?.businessName ?? 'Flowbreeds Farms Shop',
+      address: header?.address ?? null,
+      contact: header?.contact ?? null,
+      branchName: branches.getCurrent().name,
+      reference: 'TEST-PRINT',
+      datetime: new Date().toISOString(),
+      cashier: session.username,
+      type: 'sale',
+      lines: [
+        { name: 'Printer test item', quantity: 1, unitPrice: 100, lineTotal: 100, isWeightBased: false },
+      ],
+      subtotal: 100,
+      discountTotal: 0,
+      grandTotal: 100,
+      paymentMethod: 'cash',
+      tendered: 100,
+      changeDue: 0,
+    });
+    await getPrinter().printReceipt(receipt, { kickDrawer: false });
     return { ok: true as const };
   });
 }

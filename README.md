@@ -19,7 +19,7 @@ sync target and is never required for day-to-day operation.
 | Auth | argon2id hashing, in-memory session tokens, MAIN-side role gate |
 | Cloud sync | Pluggable `SyncTransport` — `FirestoreTransport` (firebase-admin) once the Financial Hub is connected, `NullTransport` before |
 | Bookkeeping link | `FinancialBridge` — two-way sync with the **Flowbreeds Financial** app (same Firebase project) |
-| Printing | ESC/POS via `node-thermal-printer` on Windows; file/preview transport on dev |
+| Printing | Raw ESC/POS to the named Windows printer via the print spooler (no extra native deps; Win7-safe); file/preview transport on dev |
 | Packaging | electron-builder → Windows NSIS `.exe`; electron-updater (generic host) |
 | Tests | Vitest (unit), Playwright `_electron` (e2e) |
 
@@ -139,9 +139,12 @@ default "Main Branch" is created automatically). Sign in, then:
 
 - **Barcode scanner**: USB HID (keyboard emulation). Scans into the focused
   Checkout field; Enter (carriage return) looks up the product.
-- **Thermal printer**: ESC/POS. On Windows the `PrinterTransport` uses
-  `node-thermal-printer`; on dev it writes a text preview under
-  `userData/receipts/`. Set the printer name in Settings.
+- **Thermal printer**: ESC/POS (Epson TM-T88 family and compatibles). Install
+  the printer's Windows driver so it appears in *Devices and Printers*, then in
+  the POS set **Settings → Receipt printer name** to that exact name and press
+  **Print test receipt**. Receipts go raw through the Windows print spooler —
+  no extra software needed. On dev the transport writes a text preview under
+  `userData/receipts/` instead.
 - **Cash drawer**: kicked automatically on cash-payment completion.
 
 ## Backup

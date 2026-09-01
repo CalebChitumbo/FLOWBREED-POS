@@ -15,6 +15,8 @@ import { runMigrations } from './db/migrate';
 import { initServices } from './services';
 import { PrinterService, setPrinter } from './printer/printer-service';
 import { FilePrinterTransport } from './printer/file-transport';
+import { WindowsRawPrinterTransport } from './printer/windows-raw-transport';
+import { CONFIG_KEYS } from '@shared/constants';
 import { initFinancialRuntime, stopFinancialRuntime } from './financial/runtime';
 import { getSyncEngine } from './sync';
 import { initAutoUpdate } from './updater';
@@ -140,8 +142,13 @@ app.whenReady().then(() => {
     const db = initDatabase(dbPath);
     const schemaVersion = runMigrations(db);
     const services = initServices(db);
-    // Dev/Linux uses the file-preview transport; Windows swaps in ESC/POS (M8).
-    setPrinter(new PrinterService(new FilePrinterTransport()));
+    // Windows tills print raw ESC/POS to the named Windows printer (Settings →
+    // Hardware); dev/Linux writes a text preview under userData/receipts.
+    const printerTransport =
+      process.platform === 'win32'
+        ? new WindowsRawPrinterTransport(() => services.config.get(CONFIG_KEYS.printerName))
+        : new FilePrinterTransport();
+    setPrinter(new PrinterService(printerTransport));
     // Boots the sync engine on FirestoreTransport when Financial Hub credentials
     // are stored (M10), or NullTransport otherwise (outbox accumulates safely),
     // plus the FinancialBridge that feeds the Flowbreeds Financial app.

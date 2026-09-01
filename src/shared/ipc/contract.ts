@@ -166,6 +166,7 @@ export interface IpcContract {
   'sale:get': { request: { token: string; id: string }; response: Transaction };
   'print:receipt': { request: { token: string; transactionId: string }; response: Ok };
   'print:reprintLast': { request: { token: string }; response: Ok };
+  'print:test': { request: { token: string }; response: Ok };
 
   // ---- Users (M1, administrator only) ----
   'users:list': { request: { token: string }; response: User[] };
@@ -299,6 +300,7 @@ export const IPC_CHANNELS = [
   'sale:get',
   'print:receipt',
   'print:reprintLast',
+  'print:test',
   'users:list',
   'users:create',
   'users:update',
