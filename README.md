@@ -17,7 +17,8 @@ sync target and is never required for day-to-day operation.
 | UI | React 19 + TypeScript + Vite (electron-vite), Mantine, Zustand, React Router |
 | Local DB | better-sqlite3 (WAL, foreign keys) in the MAIN process |
 | Auth | argon2id hashing, in-memory session tokens, MAIN-side role gate |
-| Cloud sync | Pluggable `SyncTransport` (NullTransport now; firebase-admin Firestore later) |
+| Cloud sync | Pluggable `SyncTransport` — `FirestoreTransport` (firebase-admin) once the Financial Hub is connected, `NullTransport` before |
+| Bookkeeping link | `FinancialBridge` — two-way sync with the **Flowbreeds Financial** app (same Firebase project) |
 | Printing | ESC/POS via `node-thermal-printer` on Windows; file/preview transport on dev |
 | Packaging | electron-builder → Windows NSIS `.exe`; electron-updater (generic host) |
 | Tests | Vitest (unit), Playwright `_electron` (e2e) |
@@ -57,7 +58,7 @@ npm run dev         # launch the app with HMR
 Quality gates:
 
 ```bash
-npm test            # Vitest unit tests (services, sync, security) — 70 passing
+npm test            # Vitest unit tests (services, sync, financial bridge, security) — 113 passing
 npm run typecheck   # tsc for main/preload + renderer
 npm run build       # production bundles
 npm run test:e2e    # Playwright Electron smoke test (needs the Electron-ABI rebuild + a display)
@@ -125,22 +126,50 @@ backups. The app reminds you if the last backup is over a week old.
 | M6 Reporting (sales, transactions, stock movements, CSV) | ✅ |
 | M7 Offline-first sync engine (outbox, idempotency, LWW) | ✅ (NullTransport until M10) |
 | M8 Settings, manual backup, auto-update scaffold | ✅ (NSIS/auto-update run on Windows/CI) |
-| M9 Multi-branch | ◑ architecture complete (everything branch-tagged; products pull-capable). Consolidated cross-branch reporting depends on M10. |
-| M10 Firestore wiring | ☐ requires a Firebase project (see below) |
+| M9 Multi-branch | ◑ architecture complete (everything branch-tagged; products pull-capable). Consolidated cross-branch reporting can now read the `pos_*` collections. |
+| M10 Firestore wiring | ✅ `FirestoreTransport` + encrypted credentials, activated from Settings |
+| Financial Hub | ✅ two-way bridge to the Flowbreeds Financial app (below) |
 
-## M10: wiring live Firebase (final phase)
+## Financial Hub: one system with the Flowbreeds Financial app
 
-The sync engine already does everything; only the transport needs swapping.
+The business's bookkeeping app (**Flowbreeds Financial** — the Firebase web app
+that does daily sales, expenses, cash-up, stock, receivables, payroll) and this
+POS share **one Firebase project**. The POS pushes into the collections the
+Financial app already reads — its spec explicitly shaped `shopSales` for POS
+terminals (`source: 'POS'`, `terminalId`) — so the books fill themselves in:
 
-1. Create a Firebase project; enable Firestore; download a **service-account JSON**.
-2. Implement `src/main/sync/firestore-transport.ts` as a `SyncTransport` using
-   `firebase-admin`: `push` → `db.collection(entityType).doc(entityId).set(doc, { merge: true })`
-   (idempotent by our UUID); `pull` → query `where('updatedAt', '>', since)` for the
-   pull-capable collections; `isOnline` → a lightweight reachability check.
-3. Store the service-account JSON encrypted with Electron `safeStorage` (never in
-   plain text); decrypt only in MAIN at sync time.
-4. In `src/main/index.ts`, swap `new NullTransport()` for the Firestore transport
-   when credentials are configured.
+| Direction | What | Where |
+|---|---|---|
+| POS → books | Each business day's till takings, one doc per day per terminal (id `date__shopId__pos__terminalId`), refunds netted, discounts as negative *Other sales*. Late refunds/voids re-push and **correct** the day — never duplicate it. | `shopSales` |
+| POS → books | Locally received stock and count adjustments (SUPPLY on receipt, ADHOC on loss) | `stockMovements` |
+| books → POS | Products + price changes from the central catalogue (linked via `products.financial_id`, LWW on write stamps, price changes logged to `price_history`) | `products` |
+| books → POS | HQ-recorded deliveries/transfers touching this shop, applied to local stock **exactly once** (`finhub_applied_movements` ledger) | `stockMovements` |
+| POS → cloud | Raw POS archive of every entity (M10 outbox sync; password hashes stripped) | `pos_*` collections |
 
-Because IDs are client-generated UUIDs and the conflict policy is Last-Write-Wins on
-`updatedAt`, no engine changes are needed.
+Conversions live in `src/main/financial/mapping.ts` (pure, unit-tested): ngwee ↔
+ZMW, UTC instants ↔ Africa/Lusaka business days, POS UUIDs ↔ Financial catalogue
+ids. The bridge (`src/main/financial/bridge.ts`) runs on a timer next to the
+sync engine, is fully idempotent, and records each run's outcome for the
+Settings screen. Bridge-applied deliveries are tagged (`reference_id = finhub:<id>`) so
+they are never echoed back up, and inventory writes it makes are attributed to a
+disabled `financial-hub` system user for the audit trail.
+
+### Connecting (once, per till)
+
+1. In the **Financial app's Firebase project**: Project settings → Service
+   accounts → **Generate new private key** (JSON).
+2. In the POS: **Settings → Financial Hub**, paste the JSON, **Connect**. The key
+   is encrypted with Electron `safeStorage` and never stored in plain text.
+3. Pick which Financial-app **shop** this branch posts to (the list is loaded
+   live from the app's `shops` collection) and save.
+4. Done. The bridge backfills all history on its first run, then keeps everything
+   in step automatically; **Sync now** forces a cycle and shows the outcome.
+
+Notes:
+- Products already typed into both systems are auto-linked by name instead of
+  duplicated; unlinked delivery lines are surfaced as warnings, never dropped.
+- Leave the **terminal id** alone once trading — it is part of the day-doc
+  identity in the books.
+- The Financial app's Firestore rules (`request.auth != null`) still apply to
+  its users; the POS writes via the Admin SDK, and the `pos_*` archive lives
+  behind the same rules.

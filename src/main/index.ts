@@ -15,13 +15,11 @@ import { runMigrations } from './db/migrate';
 import { initServices } from './services';
 import { PrinterService, setPrinter } from './printer/printer-service';
 import { FilePrinterTransport } from './printer/file-transport';
-import { SyncEngine } from './sync/engine';
-import { NullTransport } from './sync/transport';
-import { setSyncEngine, getSyncEngine } from './sync';
+import { initFinancialRuntime, stopFinancialRuntime } from './financial/runtime';
+import { getSyncEngine } from './sync';
 import { initAutoUpdate } from './updater';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
-import { CONFIG_KEYS } from '@shared/constants';
 import type { SyncStatus } from '@shared/ipc/contract';
 import { log } from './logger';
 
@@ -140,11 +138,10 @@ app.whenReady().then(() => {
     const services = initServices(db);
     // Dev/Linux uses the file-preview transport; Windows swaps in ESC/POS (M8).
     setPrinter(new PrinterService(new FilePrinterTransport()));
-    // NullTransport until a Firebase project is configured (M10): the outbox
-    // accumulates safely and the UI shows offline + pending.
-    const engine = new SyncEngine(db, new NullTransport(), services.config, broadcastSyncStatus);
-    setSyncEngine(engine);
-    engine.start(services.config.getNumber(CONFIG_KEYS.syncIntervalMs, 30_000));
+    // Boots the sync engine on FirestoreTransport when Financial Hub credentials
+    // are stored (M10), or NullTransport otherwise (outbox accumulates safely),
+    // plus the FinancialBridge that feeds the Flowbreeds Financial app.
+    initFinancialRuntime({ db, services, onSyncStatus: broadcastSyncStatus });
     log.info(`Local DB ready at ${dbPath} (schema v${schemaVersion})`);
   } catch (err) {
     log.error('Fatal: failed to initialise database', err);
@@ -171,6 +168,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   try {
+    stopFinancialRuntime();
     getSyncEngine().stop();
   } catch {
     /* engine may not have started */

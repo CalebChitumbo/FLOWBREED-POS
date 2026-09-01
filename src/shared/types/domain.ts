@@ -41,6 +41,8 @@ export interface Product {
   isWeightBased: boolean;
   lowStockThreshold: number;
   active: boolean;
+  /** Matching product id in the Flowbreeds Financial catalogue (null = not linked). */
+  financialId?: string | null;
   createdAt: string;
   updatedAt: string;
   barcodes?: Barcode[];

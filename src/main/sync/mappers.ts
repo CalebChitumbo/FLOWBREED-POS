@@ -9,6 +9,24 @@ export function rowToDoc(row: Record<string, unknown>): Record<string, unknown> 
   return out;
 }
 
+/** Fields that must never leave this machine, per entity type. Cloud rules give
+ *  every signed-in business user read access, so secrets stay local. */
+const SENSITIVE_DOC_FIELDS: Record<string, string[]> = {
+  user: ['passwordHash'],
+};
+
+/** Strip local-only secrets from a doc before it is pushed to any transport. */
+export function sanitizeDoc(
+  entityType: string,
+  doc: Record<string, unknown>,
+): Record<string, unknown> {
+  const sensitive = SENSITIVE_DOC_FIELDS[entityType];
+  if (!sensitive) return doc;
+  const out = { ...doc };
+  for (const field of sensitive) delete out[field];
+  return out;
+}
+
 /** entity_type (as used in sync_queue) -> SQLite table name. */
 export const TABLE_FOR_ENTITY: Record<string, string> = {
   user: 'users',

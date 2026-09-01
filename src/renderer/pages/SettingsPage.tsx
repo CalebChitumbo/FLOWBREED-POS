@@ -14,6 +14,7 @@ import {
 import { CONFIG_KEYS } from '@shared/constants';
 import { invoke } from '../api/client';
 import { requireToken } from '../stores/auth';
+import { FinancialHubCard } from '../components/FinancialHubCard';
 
 export function SettingsPage() {
   const [branchName, setBranchName] = useState('');
@@ -179,6 +180,10 @@ export function SettingsPage() {
       <Group>
         <Button onClick={save}>Save settings</Button>
       </Group>
+
+      <Divider my="sm" />
+
+      <FinancialHubCard />
 
       <Divider my="sm" />
 
