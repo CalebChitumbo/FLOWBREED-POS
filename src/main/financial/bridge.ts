@@ -269,8 +269,18 @@ export class FinancialBridge {
   private async applyDeliveries(shopId: string, result: FinhubRunResult): Promise<void> {
     const { db, config, store, inventory, branches, audit } = this.deps;
     const since = config.get(FINHUB_KEYS.lastMovementPullAt);
+    // First connection: the Financial app's delivery HISTORY must not replay
+    // onto this till's shelf count — those goods have long since been sold,
+    // and the offsetting sales are not in this till either. Historic movements
+    // are ledgered as "grandfathered" so they can never apply later; only
+    // deliveries recorded from connection day onward move local stock. The
+    // till's opening truth is a physical count (Inventory → Adjust).
+    const firstRun = !since;
     const movements = await store.listStockMovements(since || null);
-    if (movements.length === 0) return;
+    if (movements.length === 0) {
+      if (firstRun) config.set(FINHUB_KEYS.lastMovementPullAt, EPOCH);
+      return;
+    }
 
     const branchId = branches.getCurrentId();
     const links = new Map<string, string>(
@@ -281,6 +291,7 @@ export class FinancialBridge {
     );
     const systemUserId = this.ensureSystemUser();
     let mark = since || EPOCH;
+    let grandfathered = 0;
 
     for (const mv of movements) {
       if (mv.updatedAt && mv.updatedAt > mark) mark = mv.updatedAt;
@@ -290,6 +301,16 @@ export class FinancialBridge {
         .get(mv.id) as { applied_at: string } | undefined;
       const application = movementToStockOps(mv, shopId, links);
       if (!application.relevant) continue;
+
+      if (firstRun) {
+        if (!applied) {
+          db.prepare(
+            `INSERT INTO finhub_applied_movements (movement_id, applied_at, summary) VALUES (?, ?, ?)`,
+          ).run(mv.id, nowIso(), 'From before this till was connected — noted, not applied to stock');
+          grandfathered += 1;
+        }
+        continue;
+      }
 
       if (applied) {
         // It changed at HQ after we applied it — we can't safely re-apply.
@@ -334,6 +355,11 @@ export class FinancialBridge {
           `Delivery ${mv.date}: line "${skip.productName}" × ${skip.quantity} skipped — ${skip.reason}.`,
         );
       }
+    }
+    if (grandfathered > 0) {
+      result.warnings.push(
+        `${grandfathered} delivery record(s) from before this till was connected were noted but NOT applied to its stock. Count the shelves and set opening quantities with Inventory → Adjust; from now on new deliveries apply automatically.`,
+      );
     }
     config.set(FINHUB_KEYS.lastMovementPullAt, mark);
   }

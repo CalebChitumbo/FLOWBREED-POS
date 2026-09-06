@@ -35,6 +35,9 @@ describe('FinancialBridge', () => {
     });
     services.config.set(FINHUB_KEYS.shopId, SHOP);
     services.config.set(FINHUB_KEYS.terminalId, 'till-1');
+    // Simulate an established connection: historic-delivery grandfathering
+    // (first connection) has its own dedicated tests below.
+    services.config.set(FINHUB_KEYS.lastMovementPullAt, '1970-01-01T00:00:00.000Z');
     const c = await services.users.create(
       { username: 'cashier', password: 'cashpass1', role: 'cashier' },
       'admin',
@@ -368,6 +371,39 @@ describe('FinancialBridge', () => {
       seedDelivery(40, future(30)); // no local product linked to fin-bread
       const result = await runBridge();
       expect(result.warnings.join(' ')).toMatch(/no matching POS product/);
+    });
+
+    it('on FIRST connection, notes historic deliveries without touching stock', async () => {
+      services.config.set(FINHUB_KEYS.lastMovementPullAt, ''); // never connected before
+      const bread = addProduct('Bread', 15);
+      db.prepare('UPDATE products SET financial_id = ? WHERE id = ?').run('fin-bread', bread.id);
+      seedDelivery(500, future(30)); // months of old deliveries in the books
+
+      const result = await runBridge();
+      expect(result.appliedMovements).toBe(0);
+      expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(0);
+      expect(result.warnings.join(' ')).toMatch(/NOT applied|before this till was connected/);
+      const ledgered = db
+        .prepare('SELECT summary FROM finhub_applied_movements WHERE movement_id = ?')
+        .get('mv-1') as { summary: string };
+      expect(ledgered.summary).toMatch(/not applied/);
+
+      // A delivery recorded AFTER connection applies normally.
+      store.movements.push({
+        id: 'mv-new',
+        date: today(),
+        kind: 'SUPPLY',
+        fromShopId: null,
+        toShopId: SHOP,
+        destination: '',
+        source: 'HQ Production',
+        lines: [{ productId: 'fin-bread', productName: 'Bread', unit: 'each', quantity: 40 }],
+        note: '',
+        updatedAt: future(120),
+      });
+      const second = await runBridge();
+      expect(second.appliedMovements).toBe(1);
+      expect(services.inventory.getLevel(bread.id, services.branches.getCurrentId())).toBe(40);
     });
 
     it('ignores movements between other shops', async () => {
