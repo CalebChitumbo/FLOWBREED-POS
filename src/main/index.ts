@@ -15,13 +15,13 @@ import { runMigrations } from './db/migrate';
 import { initServices } from './services';
 import { PrinterService, setPrinter } from './printer/printer-service';
 import { FilePrinterTransport } from './printer/file-transport';
-import { SyncEngine } from './sync/engine';
-import { NullTransport } from './sync/transport';
-import { setSyncEngine, getSyncEngine } from './sync';
+import { WindowsRawPrinterTransport } from './printer/windows-raw-transport';
+import { CONFIG_KEYS } from '@shared/constants';
+import { initFinancialRuntime, stopFinancialRuntime } from './financial/runtime';
+import { getSyncEngine } from './sync';
 import { initAutoUpdate } from './updater';
 import { registerAllHandlers } from './ipc';
 import { mountIpc } from './ipc/registry';
-import { CONFIG_KEYS } from '@shared/constants';
 import type { SyncStatus } from '@shared/ipc/contract';
 import { log } from './logger';
 
@@ -58,24 +58,28 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function registerAppProtocol(): void {
-  protocol.handle('app', async (request) => {
+  // registerBufferProtocol rather than protocol.handle: the newer streaming API
+  // (and the global Response it takes) only exists from Electron 25, and this
+  // app targets Electron 22 — the last release that runs on the Windows 7 till.
+  protocol.registerBufferProtocol('app', (request, respond) => {
     const { pathname } = new URL(request.url);
     let rel = decodeURIComponent(pathname);
     if (rel === '/' || rel === '') rel = '/index.html';
     const filePath = normalize(join(RENDERER_DIR, rel));
     if (!filePath.startsWith(RENDERER_DIR)) {
-      return new Response('Forbidden', { status: 403 });
+      respond({ statusCode: 403, data: Buffer.from('Forbidden') });
+      return;
     }
-    try {
-      const data = await readFile(filePath);
-      const headers: Record<string, string> = {
-        'content-type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
-      };
-      if (filePath.endsWith('index.html')) headers['content-security-policy'] = PROD_CSP;
-      return new Response(new Uint8Array(data), { headers });
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
+    readFile(filePath).then(
+      (data) => {
+        const headers: Record<string, string> = {
+          'content-type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+        };
+        if (filePath.endsWith('index.html')) headers['content-security-policy'] = PROD_CSP;
+        respond({ headers, data });
+      },
+      () => respond({ statusCode: 404, data: Buffer.from('Not found') }),
+    );
   });
 }
 
@@ -138,13 +142,17 @@ app.whenReady().then(() => {
     const db = initDatabase(dbPath);
     const schemaVersion = runMigrations(db);
     const services = initServices(db);
-    // Dev/Linux uses the file-preview transport; Windows swaps in ESC/POS (M8).
-    setPrinter(new PrinterService(new FilePrinterTransport()));
-    // NullTransport until a Firebase project is configured (M10): the outbox
-    // accumulates safely and the UI shows offline + pending.
-    const engine = new SyncEngine(db, new NullTransport(), services.config, broadcastSyncStatus);
-    setSyncEngine(engine);
-    engine.start(services.config.getNumber(CONFIG_KEYS.syncIntervalMs, 30_000));
+    // Windows tills print raw ESC/POS to the named Windows printer (Settings →
+    // Hardware); dev/Linux writes a text preview under userData/receipts.
+    const printerTransport =
+      process.platform === 'win32'
+        ? new WindowsRawPrinterTransport(() => services.config.get(CONFIG_KEYS.printerName))
+        : new FilePrinterTransport();
+    setPrinter(new PrinterService(printerTransport));
+    // Boots the sync engine on FirestoreTransport when Financial Hub credentials
+    // are stored (M10), or NullTransport otherwise (outbox accumulates safely),
+    // plus the FinancialBridge that feeds the Flowbreeds Financial app.
+    initFinancialRuntime({ db, services, onSyncStatus: broadcastSyncStatus });
     log.info(`Local DB ready at ${dbPath} (schema v${schemaVersion})`);
   } catch (err) {
     log.error('Fatal: failed to initialise database', err);
@@ -171,6 +179,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   try {
+    stopFinancialRuntime();
     getSyncEngine().stop();
   } catch {
     /* engine may not have started */

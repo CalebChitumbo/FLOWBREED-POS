@@ -90,6 +90,18 @@ describe('SyncEngine (M7)', () => {
     expect(hist?.changed_by).toBe('cloud:headoffice');
   });
 
+  it('never pushes password hashes to the cloud', async () => {
+    const user = await services.users.create(
+      { username: 'cash1', password: 'longenough1', role: 'cashier' },
+      'admin',
+    );
+    await engine.tick();
+    const stored = transport.getStored('user', user.id);
+    expect(stored).toBeTruthy();
+    expect(stored).not.toHaveProperty('passwordHash');
+    expect(JSON.stringify(stored)).not.toContain('argon2');
+  });
+
   it('ignores an older head-office change (local wins)', async () => {
     const p = services.products.create(
       { name: 'Salt', category: 'Grocery', unitPrice: toMinor(10), unitOfMeasure: 'each' },

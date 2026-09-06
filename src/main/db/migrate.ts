@@ -5,6 +5,7 @@
  */
 import type { DB } from './connection';
 import init001 from './migrations/001_init.sql?raw';
+import financialHub002 from './migrations/002_financial_hub.sql?raw';
 
 export interface Migration {
   version: number;
@@ -13,7 +14,10 @@ export interface Migration {
 }
 
 /** Ordered list of migrations. Append new ones; never edit shipped ones. */
-export const MIGRATIONS: Migration[] = [{ version: 1, name: '001_init', sql: init001 }];
+export const MIGRATIONS: Migration[] = [
+  { version: 1, name: '001_init', sql: init001 },
+  { version: 2, name: '002_financial_hub', sql: financialHub002 },
+];
 
 export function getSchemaVersion(db: DB): number {
   return db.pragma('user_version', { simple: true }) as number;

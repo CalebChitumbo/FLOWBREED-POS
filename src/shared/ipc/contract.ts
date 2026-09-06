@@ -82,6 +82,37 @@ export interface ProductPatch {
   active?: boolean;
 }
 
+/** Outcome of one Financial Hub bridge cycle (see src/main/financial/bridge.ts). */
+export interface FinhubRunResult {
+  ranAt: string;
+  pushedSaleDays: string[];
+  pushedMovements: number;
+  pulledProducts: number;
+  appliedMovements: number;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface FinhubSettingsView {
+  configured: boolean;
+  projectId: string | null;
+  shopId: string | null;
+  terminalId: string;
+  pullCatalogue: boolean;
+  applyDeliveries: boolean;
+  pushStock: boolean;
+  lastRunAt: string | null;
+  lastRun: FinhubRunResult | null;
+}
+
+/** A shop as defined in the Flowbreeds Financial app (for the mapping picker). */
+export interface FinancialShopView {
+  id: string;
+  name: string;
+  kind: string;
+  active: boolean;
+}
+
 export interface AppInfo {
   name: string;
   version: string;
@@ -135,6 +166,7 @@ export interface IpcContract {
   'sale:get': { request: { token: string; id: string }; response: Transaction };
   'print:receipt': { request: { token: string; transactionId: string }; response: Ok };
   'print:reprintLast': { request: { token: string }; response: Ok };
+  'print:test': { request: { token: string }; response: Ok };
 
   // ---- Users (M1, administrator only) ----
   'users:list': { request: { token: string }; response: User[] };
@@ -194,6 +226,27 @@ export interface IpcContract {
   'sync:status': { request: { token: string }; response: SyncStatus };
   'sync:now': { request: { token: string }; response: SyncStatus };
 
+  // ---- Financial Hub (M10 + Flowbreeds Financial integration) ----
+  'finhub:getSettings': { request: { token: string }; response: FinhubSettingsView };
+  'finhub:configure': {
+    request: { token: string; serviceAccountJson: string };
+    response: { projectId: string };
+  };
+  'finhub:disconnect': { request: { token: string }; response: Ok };
+  'finhub:shops': { request: { token: string }; response: FinancialShopView[] };
+  'finhub:setSettings': {
+    request: {
+      token: string;
+      shopId?: string;
+      terminalId?: string;
+      pullCatalogue?: boolean;
+      applyDeliveries?: boolean;
+      pushStock?: boolean;
+    };
+    response: Ok;
+  };
+  'finhub:syncNow': { request: { token: string }; response: FinhubRunResult };
+
   // ---- Settings / system (M8) ----
   'config:get': { request: { token: string; keys: string[] }; response: Record<string, string | null> };
   'config:set': { request: { token: string; key: string; value: string }; response: Ok };
@@ -247,6 +300,7 @@ export const IPC_CHANNELS = [
   'sale:get',
   'print:receipt',
   'print:reprintLast',
+  'print:test',
   'users:list',
   'users:create',
   'users:update',
@@ -269,6 +323,12 @@ export const IPC_CHANNELS = [
   'report:stockMovements',
   'sync:status',
   'sync:now',
+  'finhub:getSettings',
+  'finhub:configure',
+  'finhub:disconnect',
+  'finhub:shops',
+  'finhub:setSettings',
+  'finhub:syncNow',
   'config:get',
   'config:set',
   'branch:get',

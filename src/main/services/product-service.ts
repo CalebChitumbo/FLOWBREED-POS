@@ -19,6 +19,7 @@ interface ProductRow {
   is_weight_based: number;
   low_stock_threshold: number;
   active: number;
+  financial_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,7 @@ function toProduct(row: ProductRow): Product {
     isWeightBased: row.is_weight_based === 1,
     lowStockThreshold: row.low_stock_threshold,
     active: row.active === 1,
+    financialId: row.financial_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

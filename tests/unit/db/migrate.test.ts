@@ -28,14 +28,15 @@ const EXPECTED_TABLES = [
   'audit_log',
   'sync_queue',
   'app_config',
+  'finhub_applied_movements',
 ];
 
 describe('migrations', () => {
-  it('applies 001_init and sets schema version to 1', () => {
+  it('applies all migrations and sets the schema version', () => {
     db = openDatabase(':memory:');
     const version = runMigrations(db);
-    expect(version).toBe(1);
-    expect(getSchemaVersion(db)).toBe(1);
+    expect(version).toBe(2);
+    expect(getSchemaVersion(db)).toBe(2);
   });
 
   it('creates every expected table', () => {
@@ -59,8 +60,18 @@ describe('migrations', () => {
 
   it('is idempotent — re-running does not error or change version', () => {
     db = freshDb();
-    expect(runMigrations(db)).toBe(1);
-    expect(runMigrations(db)).toBe(1);
+    expect(runMigrations(db)).toBe(2);
+    expect(runMigrations(db)).toBe(2);
+  });
+
+  it('002 adds the financial link column and unique index', () => {
+    db = freshDb();
+    const cols = db.prepare('PRAGMA table_info(products)').all() as { name: string }[];
+    expect(cols.map((c) => c.name)).toContain('financial_id');
+    const idx = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_products_financial_id'")
+      .get();
+    expect(idx).toBeTruthy();
   });
 
   it('enforces foreign keys', () => {

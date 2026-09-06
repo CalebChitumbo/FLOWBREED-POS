@@ -16,7 +16,7 @@ import { newId } from '../util/id';
 import { nowIso } from '../util/time';
 import type { ConfigService } from '../services/config-service';
 import type { SyncPullItem, SyncPushItem, SyncTransport } from './transport';
-import { HAS_SYNC_STATUS, PULL_ENTITIES, TABLE_FOR_ENTITY, rowToDoc } from './mappers';
+import { HAS_SYNC_STATUS, PULL_ENTITIES, TABLE_FOR_ENTITY, rowToDoc, sanitizeDoc } from './mappers';
 
 export interface SyncStatus {
   online: boolean;
@@ -106,7 +106,10 @@ export class SyncEngine {
     const current = table
       ? (this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(row.entity_id) as Record<string, unknown> | undefined)
       : undefined;
-    const doc = current ? rowToDoc(current) : (JSON.parse(row.payload) as Record<string, unknown>);
+    const doc = sanitizeDoc(
+      row.entity_type,
+      current ? rowToDoc(current) : (JSON.parse(row.payload) as Record<string, unknown>),
+    );
     const updatedAt = (doc.updatedAt as string) ?? (doc.datetime as string) ?? row.updated_at;
     return { entityType: row.entity_type, entityId: row.entity_id, action: row.action, doc, updatedAt };
   }

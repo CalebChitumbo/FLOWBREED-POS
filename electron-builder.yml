@@ -20,12 +20,16 @@ asarUnpack:
   - node_modules/better-sqlite3/**
   - node_modules/argon2/**
 
+# Both arches are built: many Windows 7 era tills are 32-bit machines.
+# Electron is pinned to 22.3.27 (the last release supporting Windows 7 SP1);
+# better-sqlite3 9.6.0 ships prebuilt Electron-22 binaries for both arches.
 win:
   target:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-Setup-${version}.${ext}
+        - ia32
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false

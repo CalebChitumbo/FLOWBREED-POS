@@ -1,13 +1,21 @@
 name: Build Windows Installer
 
-# Builds the Flowbreeds POS Windows .exe on GitHub's Windows servers.
-# Run it manually from the Actions tab, or it runs automatically on every push
-# to the working branch and on version tags (v1.0.0, ...).
+# Builds the Flowbreeds POS Windows .exe (64-bit AND 32-bit) on GitHub's
+# Windows servers. Run it manually from the Actions tab, or it runs
+# automatically on every push to the working branches and on version tags.
+#
+# Node 20 is REQUIRED here (not newer): the app ships better-sqlite3 9.6.0 —
+# the last release with prebuilt binaries for Electron 22, the last Electron
+# that runs on the business's Windows 7 till — and 9.6.0 only installs on
+# Node 18–20. On newer Node, npm would skip it (it is an optionalDependency)
+# and the installer would ship without its database engine; the verify step
+# below fails the build if that ever happens.
 on:
   workflow_dispatch: {}
   push:
     branches:
       - claude/great-lovelace-f7q9yf
+      - claude/app-pop-integration-gg1sis
     tags:
       - 'v*'
 
@@ -18,14 +26,23 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js 20 (required — see header comment)
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify better-sqlite3 installed (guards the Windows 7 build)
+        run: node -e "require.resolve('better-sqlite3/package.json'); console.log('better-sqlite3', require('better-sqlite3/package.json').version)"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
 
       - name: Rebuild native modules for Electron (Windows)
         run: npm run rebuild
@@ -33,13 +50,13 @@ jobs:
       - name: Build app bundles
         run: npm run build
 
-      - name: Package Windows installer (NSIS)
+      - name: Package Windows installers (NSIS, x64 + ia32)
         run: npx electron-builder --win nsis --publish never
 
-      - name: Upload the installer
+      - name: Upload the installers
         uses: actions/upload-artifact@v4
         with:
-          name: flowbreeds-pos-windows-installer
+          name: flowbreeds-pos-windows-installers
           path: release/**/*.exe
           if-no-files-found: error
           retention-days: 90
