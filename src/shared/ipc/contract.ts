@@ -82,6 +82,26 @@ export interface ProductPatch {
   active?: boolean;
 }
 
+/** What an opening-catalogue import would do, worked out before anything is written. */
+export interface CataloguePlanSummary {
+  toCreate: number;
+  toAddBarcodes: number;
+  unchanged: number;
+  /** Products that will exist with no barcode until one is scanned onto them. */
+  withoutBarcode: string[];
+  /** Barcodes the catalogue wants but another product already holds. */
+  conflicts: { barcode: string; heldBy: string }[];
+  source: string;
+  total: number;
+}
+
+export interface CatalogueImportSummary {
+  created: number;
+  barcodesAdded: number;
+  unchanged: number;
+  failed: { name: string; reason: string }[];
+}
+
 export interface AppInfo {
   name: string;
   version: string;
@@ -163,6 +183,8 @@ export interface IpcContract {
   };
   'product:removeBarcode': { request: { token: string; barcodeId: string }; response: Ok };
   'product:priceHistory': { request: { token: string; productId: string }; response: PriceHistoryEntry[] };
+  'catalogue:plan': { request: { token: string }; response: CataloguePlanSummary };
+  'catalogue:import': { request: { token: string }; response: CatalogueImportSummary };
 
   // ---- Inventory (M4, manager/administrator) ----
   'inventory:levels': { request: { token: string }; response: InventoryLevelView[] };
@@ -260,6 +282,8 @@ export const IPC_CHANNELS = [
   'product:addBarcode',
   'product:removeBarcode',
   'product:priceHistory',
+  'catalogue:plan',
+  'catalogue:import',
   'inventory:levels',
   'inventory:lowStock',
   'inventory:stockIn',

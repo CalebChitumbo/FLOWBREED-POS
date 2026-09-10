@@ -87,7 +87,13 @@ default "Main Branch" is created automatically). Sign in, then:
    address, contact), thermal printer name, sync interval, auto-lock timeout, and
    default low-stock threshold.
 2. **Products** (manager+) — add products, barcodes (multi-barcode + weight-based),
-   prices and categories.
+   prices and categories. **Import HQ catalogue** loads the 486 products carried
+   over from the previous POS (`src/main/catalogue/hq-catalogue.ts`), each with
+   the barcode it already had, so shelf labels still scan. It shows what it will
+   do before writing anything and is safe to run twice — products already present
+   are matched on barcode, then on name, and left alone apart from barcodes they
+   are missing. Prices already set on the till are never overwritten, and no
+   stock is imported: opening quantities come from a stock count.
 3. **Checkout** — open a till session with a cash float, then scan/sell.
 
 ## Roles

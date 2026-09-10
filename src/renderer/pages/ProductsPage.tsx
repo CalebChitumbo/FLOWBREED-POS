@@ -16,12 +16,20 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import type { Product, PriceHistoryEntry } from '@shared/types/domain';
+import type { CataloguePlanSummary, CatalogueImportSummary } from '@shared/ipc/contract';
 import { PRODUCT_CATEGORIES, UNITS_OF_MEASURE } from '@shared/constants';
 import { formatMoney, toMajor, toMinor } from '@shared/money';
 import { invoke } from '../api/client';
 import { requireToken } from '../stores/auth';
 
-const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((c) => ({ value: c, label: c }));
+/** The built-in categories, plus any the catalogue or the user has introduced.
+ *  A Mantine Select renders blank when its value is missing from `data`, and the
+ *  imported HQ catalogue uses the business's own 17 categories. */
+function categoryOptions(products: Product[]): { value: string; label: string }[] {
+  const all = new Set<string>(PRODUCT_CATEGORIES);
+  for (const p of products) if (p.category) all.add(p.category);
+  return [...all].sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: c }));
+}
 const UNIT_OPTIONS = UNITS_OF_MEASURE.map((u) => ({ value: u, label: u }));
 
 export function ProductsPage() {
@@ -32,6 +40,7 @@ export function ProductsPage() {
   const [formOpen, formCtl] = useDisclosure(false);
   const [barcodesFor, setBarcodesFor] = useState<Product | null>(null);
   const [historyFor, setHistoryFor] = useState<Product | null>(null);
+  const [importOpen, importCtl] = useDisclosure(false);
 
   const load = useCallback(async () => {
     try {
@@ -77,6 +86,9 @@ export function ProductsPage() {
             onChange={(e) => setFilter(e.currentTarget.value)}
             w={260}
           />
+          <Button variant="default" onClick={importCtl.open}>
+            Import HQ catalogue
+          </Button>
           <Button onClick={openCreate}>Add product</Button>
         </Group>
       </Group>
@@ -138,9 +150,15 @@ export function ProductsPage() {
         </Table.Tbody>
       </Table>
 
+      <CatalogueImportModal
+        opened={importOpen}
+        onClose={importCtl.close}
+        onImported={() => void load()}
+      />
       <ProductFormModal
         opened={formOpen}
         product={editing}
+        categories={categoryOptions(products)}
         onClose={formCtl.close}
         onSaved={() => {
           formCtl.close();
@@ -163,11 +181,13 @@ export function ProductsPage() {
 function ProductFormModal({
   opened,
   product,
+  categories,
   onClose,
   onSaved,
 }: {
   opened: boolean;
   product: Product | null;
+  categories: { value: string; label: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -242,7 +262,13 @@ function ProductFormModal({
           </Alert>
         )}
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
-        <Select label="Category" data={CATEGORY_OPTIONS} value={category} onChange={(v) => v && setCategory(v)} />
+        <Select
+          label="Category"
+          data={categories}
+          value={category}
+          searchable
+          onChange={(v) => v && setCategory(v)}
+        />
         <Group grow>
           <NumberInput
             label={weightBased ? 'Price per kg' : 'Unit price'}
@@ -405,6 +431,131 @@ function PriceHistoryModal({ product, onClose }: { product: Product | null; onCl
           </Table.Tbody>
         </Table>
       )}
+    </Modal>
+  );
+}
+
+/**
+ * Brings in the HQ opening catalogue carried over from the previous POS. Shows
+ * what the import would do before it does anything, so a manager can decline.
+ * Running it again is safe — products already here are left alone.
+ */
+function CatalogueImportModal({
+  opened,
+  onClose,
+  onImported,
+}: {
+  opened: boolean;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [plan, setPlan] = useState<CataloguePlanSummary | null>(null);
+  const [result, setResult] = useState<CatalogueImportSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!opened) return;
+    setError(null);
+    setResult(null);
+    setPlan(null);
+    invoke('catalogue:plan', { token: requireToken() })
+      .then(setPlan)
+      .catch((err: Error) => setError(err.message));
+  }, [opened]);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      const summary = await invoke('catalogue:import', { token: requireToken() });
+      setResult(summary);
+      onImported();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pending = (plan?.toCreate ?? 0) + (plan?.toAddBarcodes ?? 0);
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Import HQ catalogue" size="lg">
+      <Stack>
+        {error && (
+          <Alert color="red" variant="light">
+            {error}
+          </Alert>
+        )}
+
+        {!plan && !error && <Text size="sm">Checking what needs importing…</Text>}
+
+        {plan && (
+          <>
+            <Text size="sm" c="dimmed">
+              {plan.source} — {plan.total} products. Each keeps the code it already
+              had, so the labels on your shelves still scan. Stock is not imported:
+              opening quantities come from a stock count.
+            </Text>
+
+            <Group>
+              <Badge color="green" size="lg" variant="light">
+                {plan.toCreate} to add
+              </Badge>
+              <Badge color="blue" size="lg" variant="light">
+                {plan.toAddBarcodes} getting a barcode
+              </Badge>
+              <Badge color="gray" size="lg" variant="light">
+                {plan.unchanged} already here
+              </Badge>
+            </Group>
+
+            {plan.withoutBarcode.length > 0 && (
+              <Alert color="yellow" variant="light" title="Products arriving without a barcode">
+                <Text size="sm">
+                  {plan.withoutBarcode.join(', ')} — the old system gave these no code of
+                  their own. They import and can be sold by search; scan a barcode onto
+                  each from the Barcodes button when you have one.
+                </Text>
+              </Alert>
+            )}
+
+            {plan.conflicts.length > 0 && (
+              <Alert color="orange" variant="light" title="Barcodes already in use">
+                <Text size="sm">
+                  {plan.conflicts
+                    .map((c) => `${c.barcode} is already on "${c.heldBy}"`)
+                    .join('; ')}
+                  . These are left as they are.
+                </Text>
+              </Alert>
+            )}
+
+            {result ? (
+              <Alert color="green" variant="light" title="Import finished">
+                <Text size="sm">
+                  {result.created} product(s) added, {result.barcodesAdded} barcode(s)
+                  attached, {result.unchanged} already in place.
+                  {result.failed.length > 0 &&
+                    ` ${result.failed.length} could not be imported: ${result.failed
+                      .map((f) => `${f.name} (${f.reason})`)
+                      .join('; ')}`}
+                </Text>
+              </Alert>
+            ) : (
+              <Group justify="flex-end">
+                <Button variant="default" onClick={onClose} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button onClick={run} loading={busy} disabled={pending === 0}>
+                  {pending === 0 ? 'Nothing left to import' : `Import ${pending} product(s)`}
+                </Button>
+              </Group>
+            )}
+          </>
+        )}
+      </Stack>
     </Modal>
   );
 }

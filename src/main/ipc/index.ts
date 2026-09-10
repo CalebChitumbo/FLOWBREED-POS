@@ -9,6 +9,7 @@ import { getSchemaVersion } from '../db/migrate';
 import { registerAuthHandlers } from './auth';
 import { registerUserHandlers } from './users';
 import { registerProductHandlers } from './products';
+import { registerCatalogueHandlers } from './catalogue';
 import { registerSaleHandlers } from './sales';
 import { registerInventoryHandlers } from './inventory';
 import { registerReportHandlers } from './reports';
@@ -33,6 +34,7 @@ export function registerAllHandlers(): void {
   registerAuthHandlers();
   registerUserHandlers();
   registerProductHandlers();
+  registerCatalogueHandlers();
   registerSaleHandlers();
   registerInventoryHandlers();
   registerReportHandlers();
